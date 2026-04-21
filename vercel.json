@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "npm install",
+  "regions": ["hnd1", "sin1"],
+  "functions": {
+    "src/app/api/tone/route.ts": { "maxDuration": 30 },
+    "src/app/api/repair/route.ts": { "maxDuration": 30 },
+    "src/app/api/emotion/route.ts": { "maxDuration": 15 },
+    "src/app/api/fitness/route.ts": { "maxDuration": 10 },
+    "src/app/api/status/route.ts": { "maxDuration": 5 }
+  }
+}
