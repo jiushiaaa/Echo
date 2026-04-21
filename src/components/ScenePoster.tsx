@@ -75,17 +75,18 @@ export default function ScenePoster({
 
         <div>
           <div
-            className="font-serif font-semibold"
+            className="editorial-italic"
             style={{
               color: '#f4f4f6',
-              fontSize: size === 'lg' ? 28 : size === 'md' ? 22 : 16,
-              letterSpacing: '0.02em',
-              lineHeight: 1.2,
+              fontSize: size === 'lg' ? 40 : size === 'md' ? 30 : 20,
+              lineHeight: 1.05,
             }}
           >
             {scene.title}
           </div>
-          <div className="text-white/55 text-[13px] mt-1">{scene.subtitle}</div>
+          <div className="text-white/55 text-[13px] mt-2 font-body font-light">
+            {scene.subtitle}
+          </div>
           <div
             className="mt-2 text-[11px] tracking-wide opacity-80"
             style={{ color: accent }}

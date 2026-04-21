@@ -22,13 +22,26 @@ export default function Page({ params }: { params: { sceneId: string } }) {
           { label: scene.title },
         ]}
       />
-      <div className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-          <div>
-            <div className="text-[11px] text-muted font-mono tracking-wider mb-1 uppercase">Screen · 03</div>
-            <h1 className="text-2xl font-semibold">情绪镜像 · 真交互（非脚本）</h1>
-            <p className="text-muted text-sm mt-1">
-              随意往输入框里打字 —— AI 实时聚合弹幕情绪，广告色调、节奏、文案跟着变。输入厌恶情绪将触发全屏情绪熔断。
+      <div className="max-w-[1400px] mx-auto px-6 pt-6 pb-6">
+        <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="liquid-glass rounded-full px-3.5 py-1 text-[11px] text-white/85 tracking-wider uppercase">
+                Emotion Mirror
+              </span>
+              <span className="text-[11px] text-white/40 font-mono tracking-wider uppercase">
+                Screen · 03
+              </span>
+            </div>
+            <h1
+              className="editorial-italic text-white leading-[1.05] tracking-[-0.02em]"
+              style={{ fontSize: 'clamp(34px, 4.6vw, 60px)' }}
+            >
+              情绪镜像 · <span className="text-white/70">真交互</span>
+              <span className="text-white/30">（非脚本）</span>
+            </h1>
+            <p className="text-white/60 font-body font-light text-sm md:text-base mt-4 leading-relaxed">
+              随意往输入框里打字 —— AI 实时聚合弹幕情绪，广告色调、节奏、文案跟着变。负向情绪将触发全屏熔断。
             </p>
           </div>
           <div className="hidden md:flex gap-2">

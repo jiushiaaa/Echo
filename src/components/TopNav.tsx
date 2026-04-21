@@ -7,17 +7,16 @@ import { cn } from '@/lib/utils';
 import LLMStatusBadge from './LLMStatusBadge';
 
 const NAV = [
-  { href: '/', label: '场景', short: '01' },
-  { href: '/compare', label: '对比', short: '02' },
-  { href: '/mirror', label: '镜像', short: '03' },
-  { href: '/governance', label: '治理', short: '04' },
-  { href: '/value', label: '价值', short: '05' },
+  { href: '/', label: '首页' },
+  { href: '/compare', label: '核心对比' },
+  { href: '/mirror', label: '情绪镜像' },
+  { href: '/governance', label: '品味守门人' },
+  { href: '/value', label: '三方价值' },
 ];
 
 export default function TopNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const isHome = pathname === '/';
 
   useEffect(() => {
     setMobileOpen(false);
@@ -25,29 +24,23 @@ export default function TopNav() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-30 glass-hi">
-        <div className="max-w-[1400px] mx-auto px-5 py-3 flex items-center gap-5">
-          {!isHome && (
-            <Link
-              href="/"
-              className="hidden md:inline-flex items-center gap-1.5 text-[12px] text-muted hover:text-text transition"
-            >
-              <BackArrow />
-              <span>首页</span>
-            </Link>
-          )}
-
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-7 h-7 rounded-md border border-white/20 grid place-items-center text-white font-semibold text-[13px] tracking-tight">
+      <header className="fixed top-4 left-0 right-0 z-50 px-5 md:px-8 lg:px-12 pointer-events-none">
+        <div className="max-w-[1280px] mx-auto flex items-center justify-between gap-4 pointer-events-auto">
+          {/* 左：Logo */}
+          <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+            <div className="w-9 h-9 rounded-full liquid-glass grid place-items-center text-white font-heading italic text-[15px]">
               E
             </div>
             <div className="leading-tight">
-              <div className="text-[14px] font-semibold tracking-wide">Echo</div>
-              <div className="text-[10px] text-muted tracking-wider">AD · ECHO OF STORY</div>
+              <div className="text-[14px] font-medium tracking-wide">Echo</div>
+              <div className="text-[10px] text-muted tracking-wider uppercase">
+                Ad · Echo of Story
+              </div>
             </div>
           </Link>
 
-          <nav className="ml-4 hidden md:flex items-center gap-0.5">
+          {/* 中：pill 导航 */}
+          <nav className="liquid-glass rounded-full px-1.5 py-1 hidden md:flex items-center gap-0.5">
             {NAV.map((item) => {
               const active =
                 item.href === '/'
@@ -58,46 +51,42 @@ export default function TopNav() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'px-3 py-1.5 text-[13px] transition flex items-center gap-2 relative',
+                    'px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors',
                     active
-                      ? 'text-text'
-                      : 'text-muted hover:text-text'
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/75 hover:text-white'
                   )}
                 >
-                  <span className="text-[10px] text-muted/60 font-mono">{item.short}</span>
-                  <span>{item.label}</span>
-                  {active && (
-                    <span className="absolute left-3 right-3 bottom-0 h-[1.5px] bg-amber" />
-                  )}
+                  {item.label}
                 </Link>
               );
             })}
           </nav>
 
-          <div className="flex-1" />
-
-          <div className="hidden md:block">
-            <LLMStatusBadge />
+          {/* 右：状态 + 移动菜单 */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden md:block">
+              <LLMStatusBadge />
+            </div>
+            <button
+              className="md:hidden w-10 h-10 rounded-full liquid-glass grid place-items-center text-white/80 hover:text-white transition"
+              onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label="菜单"
+            >
+              {mobileOpen ? <CloseIcon /> : <MenuIcon />}
+            </button>
           </div>
-
-          <button
-            className="md:hidden w-9 h-9 grid place-items-center rounded-md border border-white/10 text-muted hover:text-text transition"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="菜单"
-          >
-            {mobileOpen ? <CloseIcon /> : <MenuIcon />}
-          </button>
         </div>
       </header>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-20 md:hidden pt-16">
+        <div className="fixed inset-0 z-40 md:hidden">
           <div
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-black/65 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative glass-hi border-b border-[color:var(--divider)] px-5 py-5">
-            <nav className="flex flex-col gap-1">
+          <div className="relative mt-24 mx-5 liquid-glass rounded-3xl p-3">
+            <nav className="flex flex-col">
               {NAV.map((item) => {
                 const active =
                   item.href === '/'
@@ -108,37 +97,28 @@ export default function TopNav() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'px-3 py-3 text-sm flex items-center gap-3 rounded-md border border-transparent',
+                      'px-4 py-3 text-sm rounded-2xl flex items-center justify-between',
                       active
-                        ? 'text-text border-white/10 bg-white/4'
-                        : 'text-muted hover:text-text'
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/75 hover:text-white'
                     )}
                   >
-                    <span className="text-[10px] text-muted/60 font-mono w-6">{item.short}</span>
                     <span>{item.label}</span>
+                    {active && <span className="text-white/40 text-xs">·</span>}
                   </Link>
                 );
               })}
             </nav>
-            <div className="mt-5 pt-4 border-t border-[color:var(--divider)] flex items-center justify-between">
-              <span className="text-[11px] text-muted tracking-wider uppercase">LLM</span>
+            <div className="mt-3 px-4 py-3 flex items-center justify-between border-t border-white/10">
+              <span className="text-[11px] text-white/50 tracking-widest uppercase">
+                LLM
+              </span>
               <LLMStatusBadge />
             </div>
           </div>
         </div>
       )}
     </>
-  );
-}
-
-function BackArrow() {
-  return (
-    <svg viewBox="0 0 20 20" className="w-3 h-3">
-      <path
-        fill="currentColor"
-        d="M9.7 4.3a1 1 0 010 1.4L6.4 9H16a1 1 0 110 2H6.4l3.3 3.3a1 1 0 01-1.4 1.4l-5-5a1 1 0 010-1.4l5-5a1 1 0 011.4 0z"
-      />
-    </svg>
   );
 }
 
