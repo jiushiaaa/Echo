@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
 import TopNav from '@/components/TopNav';
+import Breadcrumb from '@/components/Breadcrumb';
 import { SCENES, getScene } from '@/data/scenes';
 import { ROLE_TONES } from '@/data/prompts';
 import CompareClient from './CompareClient';
 import Link from 'next/link';
-import ScenePoster from '@/components/ScenePoster';
 
 export function generateStaticParams() {
   return SCENES.map((s) => ({ sceneId: s.id }));
@@ -25,12 +25,19 @@ export default function Page({ params }: { params: { sceneId: string } }) {
   };
 
   return (
-    <main className="min-h-screen pt-20">
+    <main className="min-h-screen">
       <TopNav />
-      <div className="max-w-[1400px] mx-auto px-6 py-6">
+      <Breadcrumb
+        items={[
+          { label: '首页', href: '/' },
+          { label: '核心对比', href: '/compare/qingyunian' },
+          { label: scene.title },
+        ]}
+      />
+      <div className="max-w-[1400px] mx-auto px-6 pt-4 pb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className="text-xs text-muted font-mono tracking-wider mb-1">SCREEN · 02</div>
+            <div className="text-[11px] text-muted font-mono tracking-wider mb-1 uppercase">Screen · 02</div>
             <h1 className="text-2xl font-semibold">核心对比 · {scene.title}</h1>
             <p className="text-muted text-sm mt-1">
               左屏是现状（硬广强插），右屏是 Echo（在情绪谷底自然过渡 + 腔调原生化）。观察底部的 AI 决策流。

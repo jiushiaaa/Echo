@@ -6,62 +6,64 @@ import { ROLE_TONES } from '@/data/prompts';
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen pt-20">
+    <main className="min-h-screen">
       <TopNav />
 
-      {/* Hero */}
-      <section className="max-w-[1280px] mx-auto px-6 pt-14 pb-10">
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center gap-3">
-            <span className="chip chip-echo">腾讯 PCG 校园 AI 创意大赛 · 方案原型</span>
-            <span className="chip">v4 · Echo</span>
-          </div>
+      {/* Hero · 左重右轻 */}
+      <section className="max-w-[1280px] mx-auto px-6 pt-28 md:pt-36 pb-24">
+        <div className="grid grid-cols-12 gap-8 items-start">
+          <div className="col-span-12 lg:col-span-9 flex flex-col gap-7">
+            <span className="chip w-fit">腾讯 PCG 校园 AI 创意大赛 · 方案原型 · v4</span>
 
-          <h1
-            className="font-serif font-semibold leading-[1.05]"
-            style={{ fontSize: 'clamp(42px, 6vw, 84px)' }}
-          >
-            广告是剧集的<span className="grad-echo">回声</span>，<br />
-            不是<span className="text-muted/90">打断</span>。
-          </h1>
+            <h1
+              className="font-serif font-semibold tracking-tight text-left"
+              style={{
+                fontSize: 'clamp(32px, 4.2vw, 58px)',
+                lineHeight: 1.3,
+                fontWeight: 600,
+              }}
+            >
+              广告是剧集的<span className="grad-echo">回声</span>，<br />
+              不是打断。
+            </h1>
 
-          <p className="text-muted text-lg max-w-3xl leading-relaxed">
-            Echo 是视频平台的「品味守门人」——让广告从
-            <span className="text-white">撕毁沉浸契约的入侵者</span>，变成
-            <span className="text-accent">延展剧集叙事的回声</span>。
-            用情绪镜像、叙事资产耦合、叙事延展包三大 AI 机制，重构广告与内容的边界。
-          </p>
+            <p className="text-muted text-base max-w-xl leading-relaxed">
+              让广告继承剧集的腔调与情绪，而非撕毁它。
+            </p>
 
-          <div className="flex flex-wrap items-center gap-3 mt-3">
-            <Link href="/compare/qingyunian" className="btn btn-primary">
-              进入核心对比 Demo
-              <ArrowRight />
-            </Link>
-            <Link href="/mirror/qingyunian" className="btn btn-ghost">
-              试试情绪镜像（现场输入）
-            </Link>
-            <Link href="/governance" className="btn btn-ghost">
-              品味守门人仪表盘
-            </Link>
+            <div className="flex flex-wrap items-center gap-6 mt-4">
+              <Link href="/compare/qingyunian" className="btn btn-primary">
+                进入 Demo
+                <ArrowRight />
+              </Link>
+              <Link href="/mirror/qingyunian" className="btn-link">
+                试试情绪镜像
+              </Link>
+              <Link href="/governance" className="btn-link">
+                品味守门人
+              </Link>
+            </div>
           </div>
         </div>
       </section>
 
+      <div className="divider-sub max-w-[1280px] mx-auto" />
+
       {/* 场景选择 */}
-      <section className="max-w-[1280px] mx-auto px-6 py-10">
-        <div className="flex items-end justify-between mb-6">
+      <section className="max-w-[1280px] mx-auto px-6 pt-20 pb-14">
+        <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
           <div>
-            <div className="text-xs text-muted font-mono tracking-wider mb-2">SCENE · 01</div>
-            <h2 className="text-2xl font-semibold">
-              选择一个剧集场景，看同一个品牌如何被 AI 改写成三种腔调
+            <div className="text-[11px] text-muted font-mono tracking-wider mb-2 uppercase">Scene · 01</div>
+            <h2 className="text-xl md:text-2xl font-semibold leading-snug">
+              选一个剧集场景，看同一个品牌被 AI 改写成三种腔调
             </h2>
-            <p className="text-muted text-sm mt-2">
-              同一款手机快充广告，在范闲体/罗辑体/宝总体里各有一副面孔 —— AI 做的不是"选广告"，是"生成广告"。
+            <p className="text-muted text-sm mt-2 max-w-xl leading-relaxed">
+              同一款手机快充，在范闲体 / 罗辑体 / 宝总体里各有一副面孔。AI 做的不是「选广告」，是「生成广告」。
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-3">
-            <span className="chip">共 3 部 S+ 级 IP</span>
-            <span className="chip">腔调反差最大化选品</span>
+          <div className="hidden md:flex items-center gap-2">
+            <span className="chip">3 部 S+ 级 IP</span>
+            <span className="chip">腔调反差最大化</span>
           </div>
         </div>
 
@@ -73,20 +75,20 @@ export default function HomePage() {
               <Link
                 key={scene.id}
                 href={`/compare/${scene.id}`}
-                className="group bordered-card overflow-hidden hover:border-echo/50 transition"
+                className="group bordered-card overflow-hidden transition hover:brightness-110"
               >
                 <ScenePoster scene={scene} size="md" />
                 <div className="p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-semibold">{role.displayName}</div>
-                    <div className="chip chip-echo text-[10px]">点击进入</div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-[13px] font-semibold">{role.displayName}</div>
+                    <div className="text-[10px] text-muted tracking-widest uppercase">进入 →</div>
                   </div>
-                  <p className="font-serif text-[15px] leading-relaxed text-muted line-clamp-3 min-h-[60px]">
+                  <p className="font-serif text-[14px] leading-relaxed text-muted line-clamp-3 min-h-[60px]">
                     「{sample.sample}」
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
+                  <div className="mt-4 flex flex-wrap gap-1.5">
                     {scene.reusableAssets.slice(0, 3).map((a) => (
-                      <span key={a} className="chip text-[11px]">
+                      <span key={a} className="chip">
                         {a}
                       </span>
                     ))}
@@ -98,23 +100,27 @@ export default function HomePage() {
         </div>
       </section>
 
+      <div className="divider-sub max-w-[1280px] mx-auto" />
+
       {/* 核心机制三连 */}
-      <section className="max-w-[1280px] mx-auto px-6 py-10">
-        <div className="text-xs text-muted font-mono tracking-wider mb-2">MECHANISM · 02</div>
-        <h2 className="text-2xl font-semibold mb-6">三大核心机制 · 每一条都能在 Demo 里亲手触发</h2>
+      <section className="max-w-[1280px] mx-auto px-6 pt-20 pb-14">
+        <div className="mb-8">
+          <div className="text-[11px] text-muted font-mono tracking-wider mb-2 uppercase">Mechanism · 02</div>
+          <h2 className="text-xl md:text-2xl font-semibold">三大核心机制 · 每一条都能在 Demo 里亲手触发</h2>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <MechCard
             num="01"
             title="情绪镜像"
-            desc="AI 读弹幕 + 读剧情，广告色调/文案/节奏自动响应。评委可现场输入任意弹幕，负向情绪触发全屏熔断。"
+            desc="AI 读弹幕 + 读剧情，广告色调 / 文案 / 节奏自动响应。评委可现场输入任意弹幕，负向情绪触发全屏熔断。"
             href="/mirror/qingyunian"
             highlight="现场输入"
           />
           <MechCard
             num="02"
             title="叙事资产耦合"
-            desc="AI 继承剧集资产（腰牌/光年/霓虹）改写品牌文案。错误配对自动拦截，AI 修复引擎一键挽救。"
+            desc="AI 继承剧集资产（腰牌 / 光年 / 霓虹）改写品牌文案。错误配对自动拦截，AI 修复引擎一键挽救。"
             href="/governance"
             highlight="拦截 + 修复"
           />
@@ -128,16 +134,16 @@ export default function HomePage() {
         </div>
       </section>
 
+      <div className="divider-sub max-w-[1280px] mx-auto" />
+
       {/* 底部方法论链接 */}
-      <section className="max-w-[1280px] mx-auto px-6 py-14">
+      <section className="max-w-[1280px] mx-auto px-6 pt-20 pb-24">
         <div className="bordered-card-hi p-8 flex flex-col md:flex-row gap-6 items-start md:items-center justify-between">
           <div>
-            <div className="text-xs text-muted font-mono tracking-wider mb-2">
-              METHODOLOGY
-            </div>
-            <h3 className="text-xl font-semibold font-serif leading-tight">
+            <div className="text-[11px] text-muted font-mono tracking-wider mb-2 uppercase">Methodology</div>
+            <h3 className="text-lg md:text-xl font-semibold font-serif leading-snug">
               为什么长视频用户比短视频用户更恨广告？<br />
-              <span className="text-muted">—— 因为广告撕毁了"沉浸契约"。</span>
+              <span className="text-muted">—— 因为广告撕毁了「沉浸契约」。</span>
             </h3>
           </div>
           <Link href="/value" className="btn btn-primary whitespace-nowrap">
@@ -147,10 +153,15 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer className="max-w-[1280px] mx-auto px-6 py-12 text-xs text-muted flex items-center justify-between">
-        <div>Echo · v4 · 腾讯 PCG 校园 AI 创意大赛方案原型</div>
-        <div className="font-mono">
-          OpenAI-compatible · DeepSeek / Kimi / Qwen · 认接口不认厂商
+      <footer className="border-t border-[color:var(--divider)] mt-10">
+        <div className="max-w-[1280px] mx-auto px-6 py-10 flex flex-col gap-3 md:flex-row md:items-center md:justify-between text-[12px] text-muted">
+          <div className="flex flex-col gap-1">
+            <div className="text-text font-medium">Echo · v4</div>
+            <div>腾讯 PCG 校园 AI 创意大赛 · 方案原型 · 2026</div>
+          </div>
+          <div className="font-mono text-[11px] tracking-wide">
+            OpenAI-compatible · DeepSeek / Kimi / Qwen · 认接口不认厂商
+          </div>
         </div>
       </footer>
     </main>
@@ -173,15 +184,15 @@ function MechCard({
   return (
     <Link
       href={href}
-      className="bordered-card p-6 hover:border-echo/50 transition group block"
+      className="bordered-card p-6 transition hover:brightness-110 group block"
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className="font-mono text-xs text-muted">{num}</div>
-        <span className="chip chip-accent text-[10px]">{highlight}</span>
+      <div className="flex items-center justify-between mb-4">
+        <div className="font-mono text-[11px] text-muted tracking-wider">{num}</div>
+        <span className="chip chip-accent">{highlight}</span>
       </div>
-      <div className="text-lg font-semibold mb-2">{title}</div>
-      <p className="text-sm text-muted leading-relaxed">{desc}</p>
-      <div className="mt-4 text-xs text-echo group-hover:translate-x-1 transition inline-flex items-center gap-1">
+      <div className="text-[17px] font-semibold mb-2">{title}</div>
+      <p className="text-[13px] text-muted leading-relaxed">{desc}</p>
+      <div className="mt-5 text-[12px] text-amber group-hover:translate-x-1 transition inline-flex items-center gap-1">
         进入体验 <ArrowRight />
       </div>
     </Link>

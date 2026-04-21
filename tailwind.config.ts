@@ -7,22 +7,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#0a0a0f',
-        surface: '#12121a',
-        surfaceHi: '#1a1a24',
-        border: '#2a2a36',
-        text: '#e7e7ef',
-        muted: '#8a8a9a',
-        accent: '#ff6b35',
-        accentHi: '#ff8a5c',
-        echo: '#7c5cff',
-        echoHi: '#a488ff',
+        background: '#0c0c0e',
+        surface: '#111113',
+        surfaceHi: '#15151a',
+        border: '#1f1f23',
+        text: '#ededed',
+        muted: '#6b7280',
+        // 单强调色：琥珀金（替代原紫橙双色渐变）
+        amber: '#d4a574',
+        amberHi: '#e6bb89',
+        // 语义别名保持向后兼容，全部收敛为琥珀金
+        accent: '#d4a574',
+        accentHi: '#e6bb89',
+        echo: '#d4a574',
+        echoHi: '#e6bb89',
         warn: '#f5c400',
         danger: '#ff3860',
         ok: '#22c55e',
         qingyu: '#caa45d',
-        santi: '#3b82f6',
-        fanhua: '#d4405a',
+        santi: '#7a8fa8',
+        fanhua: '#c07a7a',
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', 'sans-serif'],
