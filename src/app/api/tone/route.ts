@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       sellingPoint: body.sellingPoint,
       sceneContext: body.sceneContext,
       emotionOverride: body.emotionOverride,
+      mode: body.mode,
     });
     return new Response(stream, {
       headers: {

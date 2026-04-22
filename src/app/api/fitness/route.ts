@@ -5,6 +5,7 @@ import { getScene } from '@/data/scenes';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     if (!brand || !scene) {
       return Response.json({ error: 'unknown brand or scene' }, { status: 400 });
     }
-    const result = scoreFitness(brand, scene);
+    const result = await scoreFitness(brand, scene);
     return Response.json(result);
   } catch (e: any) {
     return Response.json({ error: e?.message ?? 'unknown' }, { status: 500 });

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SCENES } from '@/data/scenes';
 import { BRANDS } from '@/data/brands';
 import ScenePoster from '@/components/ScenePoster';
@@ -13,6 +14,8 @@ type FitnessResult = {
   reasons: string[];
   categoryFit: number;
   styleFit: number;
+  llmScore?: number;
+  llmReason?: string;
 };
 
 type BrandState = {
@@ -31,12 +34,14 @@ export default function MatchClient() {
   );
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [ranked, setRanked] = useState<Array<{ id: string; score: number }>>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setPhase('idle');
     setBrandStates(Object.fromEntries(BRANDS.map((b) => [b.id, { status: 'idle' as const }])));
     setWinnerId(null);
     setRanked([]);
+    setSelectedId(null);
   }, []);
 
   const startMatch = useCallback(async () => {
@@ -79,11 +84,14 @@ export default function MatchClient() {
     await delay(800);
     setRanked(sorted);
     setWinnerId(sorted[0].id);
+    setSelectedId(sorted[0].id);
     setPhase('result');
   }, [reset]);
 
   const winner = BRANDS.find((b) => b.id === winnerId);
   const winnerResult = winnerId ? brandStates[winnerId]?.result : undefined;
+  const selectedBrand = BRANDS.find((b) => b.id === selectedId);
+  const selectedResult = selectedId ? brandStates[selectedId]?.result : undefined;
 
   return (
     <div className="space-y-8">
@@ -114,7 +122,7 @@ export default function MatchClient() {
           {phase === 'idle' ? '开始匹配' : phase === 'result' ? '重新匹配' : '匹配中…'}
         </button>
         {phase !== 'idle' && (
-          <div className="flex items-center gap-2 text-sm text-muted">
+          <div className="hidden sm:flex items-center gap-2 text-sm text-muted">
             <StepDot active={phase === 'scanning'} done={phase === 'evaluating' || phase === 'result'} />
             <span className={cn(phase === 'scanning' && 'text-echo')}>扫描场景上下文</span>
             <span className="text-white/20 mx-1">→</span>
@@ -130,7 +138,7 @@ export default function MatchClient() {
       {phase === 'scanning' && (
         <div className="bordered-card p-5 animate-pulse">
           <p className="text-echo text-sm font-medium mb-3">扫描场景上下文…</p>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             <div>
               <span className="text-muted">类型</span>
               <span className="ml-2 text-white/80">{scene.genre}</span>
@@ -161,6 +169,7 @@ export default function MatchClient() {
             const bs = brandStates[brand.id];
             const score = bs?.result?.score ?? 0;
             const isWinner = phase === 'result' && brand.id === winnerId;
+            const isSelected = phase === 'result' && brand.id === selectedId;
             const borderColor =
               bs?.status === 'done'
                 ? score >= 70
@@ -174,12 +183,18 @@ export default function MatchClient() {
               <div
                 key={brand.id}
                 className={cn(
-                  'bordered-card p-3 transition-all duration-500',
+                  'bordered-card p-3 transition-all duration-500 cursor-pointer',
                   borderColor,
                   isWinner && 'ring-2 ring-echo scale-[1.03] shadow-[0_0_30px_rgba(212,165,116,0.15)]',
+                  isSelected && !isWinner && 'ring-1 ring-white/30',
                   bs?.status === 'done' && score >= 70 && 'border-green-500/60',
                   bs?.status === 'done' && score < 50 && 'border-red-500/40',
                 )}
+                onClick={() => {
+                  if (phase === 'result' && bs?.status === 'done') {
+                    setSelectedId(brand.id);
+                  }
+                }}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-xl">{brand.glyph}</span>
@@ -218,76 +233,151 @@ export default function MatchClient() {
         </div>
       )}
 
-      {phase === 'result' && winner && winnerResult && (
-        <div className="bordered-card-hi p-6 mt-4">
-          <div className="flex items-center gap-2 mb-5">
-            <span className="chip chip-ok">AI 推荐</span>
-            <span className="text-echo text-sm font-medium">最佳匹配品牌</span>
-          </div>
-          <div className="flex flex-col md:flex-row gap-8">
-            <div className="flex flex-col items-center">
-              <FitnessGauge score={winnerResult.score} size={180} />
+      <AnimatePresence mode="wait">
+        {phase === 'result' && selectedBrand && selectedResult && (
+          <motion.div
+            key={selectedId}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className={cn(
+              'p-6 mt-4 rounded-2xl',
+              selectedId === winnerId ? 'bordered-card-hi' : 'bordered-card'
+            )}
+          >
+            <div className="flex items-center gap-2 mb-5">
+              {selectedId === winnerId && <span className="chip chip-ok">AI 推荐</span>}
+              <span className="text-echo text-sm font-medium">
+                {selectedId === winnerId ? '最佳匹配品牌' : '品牌详情'}
+              </span>
             </div>
-            <div className="flex-1 space-y-4">
-              <div className="flex items-center gap-3">
-                <span className="text-3xl">{winner.glyph}</span>
-                <div>
-                  <div className="text-white text-xl font-medium">{winner.name}</div>
-                  <div className="text-muted text-sm">{winner.category}</div>
+            <div className="flex flex-col md:flex-row gap-8">
+              <div className="flex flex-col items-center">
+                <FitnessGauge score={selectedResult.score} size={180} />
+              </div>
+              <div className="flex-1 space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{selectedBrand.glyph}</span>
+                  <div>
+                    <div className="text-white text-xl font-medium">{selectedBrand.name}</div>
+                    <div className="text-muted text-sm">{selectedBrand.category}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="text-[11px] text-white/40 tracking-wider uppercase mb-2">评分分解</div>
+                  <ScoreBar
+                    label="语义相似度（向量检索）"
+                    value={selectedResult.styleFit}
+                    weight={50}
+                  />
+                  <ScoreBar
+                    label="品类内在契合度"
+                    value={selectedResult.categoryFit}
+                    weight={30}
+                  />
+                  {selectedResult.llmScore !== undefined && (
+                    <ScoreBar
+                      label="LLM 精排评分"
+                      value={selectedResult.llmScore}
+                      weight={20}
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  {selectedResult.reasons.map((r, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm">
+                      <span className="text-echo mt-0.5">·</span>
+                      <span className="text-white/80">{r}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {selectedResult.llmReason && (
+                  <div className="bordered-card p-4 mt-3">
+                    <div className="text-[11px] text-white/40 tracking-wider uppercase mb-2">
+                      AI 为什么选它
+                    </div>
+                    <p className="text-white/80 text-sm leading-relaxed">
+                      {selectedResult.llmReason}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {selectedBrand.styleTags.map((t) => (
+                    <span key={t} className="chip chip-accent">{t}</span>
+                  ))}
                 </div>
               </div>
-              <div className="space-y-2">
-                {winnerResult.reasons.map((r, i) => (
-                  <div key={i} className="flex items-start gap-2 text-sm">
-                    <span className="text-echo mt-0.5">·</span>
-                    <span className="text-white/80">{r}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {winner.styleTags.map((t) => (
-                  <span key={t} className="chip chip-accent">{t}</span>
-                ))}
-              </div>
             </div>
-          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {ranked.length > 1 && (
-            <div className="mt-6 pt-5 border-t border-white/10">
-              <p className="text-muted text-xs mb-3 tracking-wider uppercase">完整排名</p>
-              <div className="space-y-2">
-                {ranked.map((item, idx) => {
-                  const b = BRANDS.find((br) => br.id === item.id)!;
-                  return (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm',
-                        idx === 0 && 'bg-white/5'
-                      )}
-                    >
-                      <span className="text-muted font-mono text-xs w-5 text-right">
-                        {idx + 1}
-                      </span>
-                      <span className="text-base">{b.glyph}</span>
-                      <span className="text-white/90 flex-1 truncate">{b.name}</span>
-                      <span className="text-muted text-xs">{b.category}</span>
-                      <span
-                        className={cn(
-                          'font-mono font-bold w-10 text-right',
-                          item.score >= 70 ? 'text-green-400' : item.score >= 50 ? 'text-yellow-400' : 'text-red-400'
-                        )}
-                      >
-                        {item.score}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+      {phase === 'result' && ranked.length > 1 && (
+        <div className="bordered-card p-5">
+          <p className="text-muted text-xs mb-3 tracking-wider uppercase">完整排名</p>
+          <div className="space-y-2">
+            {ranked.map((item, idx) => {
+              const b = BRANDS.find((br) => br.id === item.id)!;
+              const isActive = item.id === selectedId;
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors',
+                    isActive ? 'bg-white/[0.07]' : 'hover:bg-white/[0.03]',
+                    idx === 0 && !isActive && 'bg-white/[0.03]'
+                  )}
+                  onClick={() => setSelectedId(item.id)}
+                >
+                  <span className="text-muted font-mono text-xs w-5 text-right">
+                    {idx + 1}
+                  </span>
+                  <span className="text-base">{b.glyph}</span>
+                  <span className="text-white/90 flex-1 truncate">{b.name}</span>
+                  <span className="text-muted text-xs">{b.category}</span>
+                  <span
+                    className={cn(
+                      'font-mono font-bold w-10 text-right',
+                      item.score >= 70 ? 'text-green-400' : item.score >= 50 ? 'text-yellow-400' : 'text-red-400'
+                    )}
+                  >
+                    {item.score}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ScoreBar({ label, value, weight }: { label: string; value: number; weight: number }) {
+  const pct = Math.round(value * 100);
+  const color = pct >= 70 ? '#22c55e' : pct >= 50 ? '#eab308' : '#ef4444';
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-white/60">{label}</span>
+        <span className="text-white/40 font-mono">
+          {pct}/100 <span className="text-white/20">× {weight}%</span>
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+        <motion.div
+          className="h-full rounded-full"
+          style={{ background: color }}
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        />
+      </div>
     </div>
   );
 }

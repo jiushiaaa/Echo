@@ -4,12 +4,11 @@
  * 严格基于 OpenAI-compatible 协议，"认接口不认厂商"。
  * 通过环境变量切换：OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL
  *
- * 兼容厂商（任选其一）：
- *   DeepSeek:     https://api.deepseek.com/v1
- *   Kimi:         https://api.moonshot.cn/v1
- *   通义千问:     https://dashscope.aliyuncs.com/compatible-mode/v1
- *   OpenAI:       https://api.openai.com/v1
- *   智谱 GLM-4:   https://open.bigmodel.cn/api/paas/v4
+ * 支持四种模型角色：
+ *   OPENAI_MODEL          → 主文本模型（过渡语/情绪/修复）
+ *   OPENAI_VISION_MODEL   → 视觉模型（场景分析）
+ *   OPENAI_EMBEDDING_MODEL→ 向量模型（品牌匹配）
+ *   OPENAI_LONG_MODEL     → 长上下文模型（整集分析）
  * ============================================================
  */
 
@@ -52,13 +51,17 @@ function getClient() {
 }
 
 const getModel = () => process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const getVisionModel = () => process.env.OPENAI_VISION_MODEL || 'glm-4v-flash';
+const getLongModel = () => process.env.OPENAI_LONG_MODEL || 'glm-4-long';
+const getEmbeddingModel = () => process.env.OPENAI_EMBEDDING_MODEL || 'embedding-3';
+
+export { getVisionModel, getLongModel, getEmbeddingModel };
 
 /**
  * 非流式调用
  */
 export async function llmCall(opts: LLMCallOptions): Promise<string> {
   if (isMockMode()) {
-    // 被调用方应使用 mock 模块处理
     throw new Error('MOCK_MODE');
   }
   const client = getClient()!;
@@ -109,6 +112,57 @@ export async function llmStream(opts: LLMCallOptions) {
       }
     },
   });
+}
+
+/**
+ * 视觉模型调用：接收 base64 图片 + 文本 prompt
+ */
+export async function llmVisionCall(opts: {
+  systemPrompt: string;
+  userPrompt: string;
+  imageBase64: string;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string> {
+  if (isMockMode()) {
+    throw new Error('MOCK_MODE');
+  }
+  const client = getClient()!;
+  const resp = await client.chat.completions.create({
+    model: getVisionModel(),
+    messages: [
+      { role: 'system', content: opts.systemPrompt },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: { url: opts.imageBase64.startsWith('data:') ? opts.imageBase64 : `data:image/jpeg;base64,${opts.imageBase64}` },
+          },
+          { type: 'text', text: opts.userPrompt },
+        ],
+      },
+    ],
+    temperature: opts.temperature ?? 0.3,
+    max_tokens: opts.maxTokens ?? 800,
+  });
+  return resp.choices[0]?.message?.content?.trim() ?? '';
+}
+
+/**
+ * 向量化调用：返回 number[]
+ */
+export async function llmEmbed(text: string, dimensions = 512): Promise<number[]> {
+  if (isMockMode()) {
+    throw new Error('MOCK_MODE');
+  }
+  const client = getClient()!;
+  const resp = await client.embeddings.create({
+    model: getEmbeddingModel(),
+    input: text,
+    dimensions,
+  } as any);
+  return (resp.data[0] as any).embedding;
 }
 
 /**

@@ -78,7 +78,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div style={{ height: '500px', position: 'relative' }}>
+        <div className="h-[300px] sm:h-[400px] md:h-[500px]" style={{ position: 'relative' }}>
           <CircularGallery
             items={[
               { image: '/images/qingyunian.png', text: '庆余年' },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import SceneVideoStub from '@/components/SceneVideoStub';
 import AdPlayer from '@/components/AdPlayer';
 import AIDecisionPanel, { DecisionStep } from '@/components/AIDecisionPanel';
@@ -22,6 +23,12 @@ type LeftMode = 'idle' | 'scene' | 'hardAd' | 'done';
 type RightMode = 'idle' | 'scene' | 'transition' | 'nativeAd' | 'return' | 'done';
 
 const SCENE_SHORT_DURATION = 16;
+
+const cardVariants = {
+  initial: { opacity: 0, y: 20, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
+  exit: { opacity: 0, scale: 0.98, transition: { duration: 0.3 } },
+};
 
 export default function CompareClient({
   scene,
@@ -63,6 +70,7 @@ export default function CompareClient({
         sellingPoint: scene.heroAd.sellingPoint,
         sceneContext: scene.relaxedMoment.label,
         emotionOverride: 'heartache',
+        mode: 'transition',
       }),
     })
       .then((res) => {
@@ -91,7 +99,6 @@ export default function CompareClient({
     if (rightMode !== 'return' || returnStreamStarted.current) return;
     returnStreamStarted.current = true;
 
-    const role = ROLE_TONES[scene.roleToneId];
     setReturnText('');
 
     fetch('/api/tone', {
@@ -103,6 +110,7 @@ export default function CompareClient({
         sellingPoint: '剧情回归',
         sceneContext: '广告结束，剧情即将继续',
         emotionOverride: 'catharsis',
+        mode: 'return',
       }),
     })
       .then((res) => {
@@ -179,6 +187,11 @@ export default function CompareClient({
 
   const onHardAdEnd = () => setLeftMode('done');
   const onNativeAdEnd = () => setRightMode('return');
+
+  const activeStreamText =
+    rightMode === 'transition' ? transitionText
+    : rightMode === 'return' ? returnText
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -274,72 +287,102 @@ export default function CompareClient({
             </p>
           </div>
 
-          {rightMode === 'scene' || rightMode === 'idle' ? (
-            <SceneVideoStub
-              scene={scene}
-              playing={playing && rightMode === 'scene'}
-              currentTime={mapTime(rightTime, SCENE_SHORT_DURATION, scene.duration)}
-              onTimeUpdate={onRightTimeUpdate}
-            />
-          ) : rightMode === 'transition' ? (
-            <div className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden">
-              <div
-                className="absolute inset-0 opacity-20"
-                style={{ background: scene.poster.bgGradient }}
-              />
-              <div className="relative z-10 px-8 text-center max-w-lg">
-                <div className="chip chip-echo mb-4">AI 过渡语 · {ROLE_TONES[scene.roleToneId].displayName}</div>
-                <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
-                  「{transitionText}
-                  <span className="stream-cursor" />」
-                </p>
-                <p className="text-xs text-muted mt-3">
-                  从剧情情绪平滑衔接到广告
-                </p>
-              </div>
-            </div>
-          ) : rightMode === 'nativeAd' ? (
-            <div className="relative">
-              <AdPlayer
-                videoSrc={scene.heroAd.realAdSrc}
-                frames={scene.heroAd.fallbackFrames}
-                duration={scene.heroAd.duration}
-                brandName={scene.heroAd.brandName}
-                playing
-                onEnd={onNativeAdEnd}
-                variant="native"
-              />
-              <div className="absolute inset-0 pointer-events-none animate-fade-in">
-                <div className="absolute top-6 right-6 chip chip-echo">
-                  Echo 匹配品牌 · {scene.heroAd.brandName}
+          <AnimatePresence mode="wait">
+            {(rightMode === 'scene' || rightMode === 'idle') && (
+              <motion.div key="scene" {...cardVariants}>
+                <SceneVideoStub
+                  scene={scene}
+                  playing={playing && rightMode === 'scene'}
+                  currentTime={mapTime(rightTime, SCENE_SHORT_DURATION, scene.duration)}
+                  onTimeUpdate={onRightTimeUpdate}
+                />
+              </motion.div>
+            )}
+
+            {rightMode === 'transition' && (
+              <motion.div
+                key="transition"
+                variants={cardVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden"
+              >
+                <div
+                  className="absolute inset-0 opacity-20"
+                  style={{ background: scene.poster.bgGradient }}
+                />
+                <div className="relative z-10 px-8 text-center max-w-lg">
+                  <div className="chip chip-echo mb-4">AI 过渡语 · {ROLE_TONES[scene.roleToneId].displayName}</div>
+                  <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
+                    「{transitionText}
+                    <span className="stream-cursor" />」
+                  </p>
+                  <p className="text-xs text-muted mt-3">
+                    从剧情情绪平滑衔接到广告
+                  </p>
                 </div>
-              </div>
-            </div>
-          ) : rightMode === 'return' ? (
-            <div className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden">
-              <div
-                className="absolute inset-0 opacity-20"
-                style={{ background: scene.poster.bgGradient }}
-              />
-              <div className="relative z-10 px-8 text-center max-w-lg">
-                <div className="chip chip-echo mb-4">AI 回归语 · 拉回剧情</div>
-                <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
-                  「{returnText}
-                  <span className="stream-cursor" />」
-                </p>
-                <p className="text-xs text-muted mt-3">
-                  广告结束，AI 将观众情绪拉回剧情
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="aspect-video rounded-xl grid place-items-center bordered-card text-center p-6">
-              <div>
-                <div className="chip chip-echo mb-3">Echo 投放完成 · 78% 完播</div>
-                <div className="text-lg text-white/80">过渡语 → 匹配广告 → 回归语 · 剧情无感恢复</div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+
+            {rightMode === 'nativeAd' && (
+              <motion.div key="native-ad" {...cardVariants} className="relative">
+                <AdPlayer
+                  videoSrc={scene.heroAd.realAdSrc}
+                  frames={scene.heroAd.fallbackFrames}
+                  duration={scene.heroAd.duration}
+                  brandName={scene.heroAd.brandName}
+                  playing
+                  onEnd={onNativeAdEnd}
+                  variant="native"
+                />
+                <div className="absolute inset-0 pointer-events-none animate-fade-in">
+                  <div className="absolute top-6 right-6 chip chip-echo">
+                    Echo 匹配品牌 · {scene.heroAd.brandName}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {rightMode === 'return' && (
+              <motion.div
+                key="return"
+                variants={cardVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden"
+              >
+                <div
+                  className="absolute inset-0 opacity-20"
+                  style={{ background: scene.poster.bgGradient }}
+                />
+                <div className="relative z-10 px-8 text-center max-w-lg">
+                  <div className="chip chip-echo mb-4">AI 回归语 · 拉回剧情</div>
+                  <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
+                    「{returnText}
+                    <span className="stream-cursor" />」
+                  </p>
+                  <p className="text-xs text-muted mt-3">
+                    广告结束，AI 将观众情绪拉回剧情
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {rightMode === 'done' && (
+              <motion.div
+                key="done"
+                {...cardVariants}
+                className="aspect-video rounded-xl grid place-items-center bordered-card text-center p-6"
+              >
+                <div>
+                  <div className="chip chip-echo mb-3">Echo 投放完成 · 78% 完播</div>
+                  <div className="text-lg text-white/80">过渡语 → 匹配广告 → 回归语 · 剧情无感恢复</div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="grid grid-cols-3 gap-2">
             <Stat label="用户跳过率" value="22%" tone="ok" sub="↓45pp vs 传统" />
@@ -351,7 +394,12 @@ export default function CompareClient({
 
       <AIDecisionPanel
         steps={decision}
-        streamingLabel="Echo AI 决策流程"
+        streamingText={activeStreamText}
+        streamingLabel={
+          rightMode === 'transition' ? 'AI 过渡语生成中'
+          : rightMode === 'return' ? 'AI 回归语生成中'
+          : 'Echo AI 决策流程'
+        }
       />
     </div>
   );
@@ -407,7 +455,7 @@ function initialSteps(scene: SceneDefinition, analysis: SceneAnalysis): Decision
       icon: null,
       label: '品牌匹配决策',
       value: `广告库 → ${scene.heroAd.brandName}（${scene.heroAd.brandCategory}）· 契合度 86%`,
-      hint: '品类契合 + 风格标签匹配 · 淘汰不相关品牌',
+      hint: '向量检索 + LLM 重排 · 淘汰不相关品牌',
       state: 'pending',
     },
     {

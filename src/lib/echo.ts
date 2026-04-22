@@ -6,16 +6,18 @@
  * ============================================================
  */
 
-import { ROLE_TONES, buildToneUserPrompt } from '@/data/prompts';
+import { ROLE_TONES, buildToneUserPrompt, TRANSITION_PROMPT, RETURN_PROMPT } from '@/data/prompts';
 import type { BrandMaterial } from '@/data/brands';
 import type { SceneDefinition } from '@/data/scenes';
-import { llmCall, llmStream, mockTextStream, getLLMStatus } from './llm';
+import { llmCall, llmStream, llmVisionCall, mockTextStream, getLLMStatus } from './llm';
+import { rankBrandsByEmbedding, cosineSimilarity, embedBrand, embedScene } from './embedding';
 import {
   mockToneCopy,
   mockEmotionAggregate,
   mockSceneAnalysis,
   mockFitnessScore,
   mockRepair,
+  mockVisionAnalysis,
   type EmotionAggregate,
 } from './mock';
 
@@ -23,7 +25,7 @@ export { getLLMStatus };
 export type { EmotionAggregate };
 
 // ------------------------------------------------------------
-// 1. 腔调改写（流式）
+// 1. 腔调改写（流式）— 支持 transition / return / ad-copy 三种模式
 // ------------------------------------------------------------
 
 export async function generateToneCopyStream(params: {
@@ -32,11 +34,12 @@ export async function generateToneCopyStream(params: {
   sellingPoint: string;
   sceneContext?: string;
   emotionOverride?: string;
+  mode?: 'ad-copy' | 'transition' | 'return';
 }): Promise<ReadableStream<Uint8Array>> {
   const role = ROLE_TONES[params.roleId];
   if (!role) throw new Error(`Unknown role: ${params.roleId}`);
 
-  const userPrompt = buildToneUserPrompt(params);
+  const mode = params.mode ?? 'ad-copy';
   const status = getLLMStatus();
 
   if (status.mock) {
@@ -49,8 +52,19 @@ export async function generateToneCopyStream(params: {
     return mockTextStream(copy, 32);
   }
 
+  let systemPrompt: string;
+  if (mode === 'transition') {
+    systemPrompt = TRANSITION_PROMPT.replace('{{roleName}}', role.displayName).replace('{{era}}', role.era);
+  } else if (mode === 'return') {
+    systemPrompt = RETURN_PROMPT.replace('{{roleName}}', role.displayName).replace('{{era}}', role.era);
+  } else {
+    systemPrompt = role.systemPrompt;
+  }
+
+  const userPrompt = buildToneUserPrompt(params);
+
   return llmStream({
-    systemPrompt: role.systemPrompt,
+    systemPrompt,
     userPrompt,
     temperature: 0.9,
     maxTokens: 180,
@@ -92,26 +106,128 @@ export async function aggregateEmotion(messages: string[]): Promise<EmotionAggre
       ...json,
       sampleCount: messages.length,
     };
-  } catch (e) {
-    // LLM 出错时降级 Mock
+  } catch {
     return mockEmotionAggregate(messages);
   }
 }
 
 // ------------------------------------------------------------
-// 3. 场景分析（快速返回，Mock 已经足够精确）
+// 3. 场景分析（视觉模型 / Mock 双模式）
 // ------------------------------------------------------------
 
 export function analyzeScene(sceneId: string) {
   return mockSceneAnalysis(sceneId);
 }
 
+export async function analyzeSceneVision(imageBase64: string) {
+  const status = getLLMStatus();
+  if (status.mock) {
+    return mockVisionAnalysis();
+  }
+
+  const systemPrompt = `你是腾讯视频的 AI 场景分析引擎。给定一帧视频截图，你需要输出以下 JSON：
+{
+  "sceneType": "场景类型（如：古装权谋/都市情感/科幻悬疑等）",
+  "objects": ["检测到的关键物体/角色列表"],
+  "emotionTone": "当前帧的情绪基调（如：紧张/温馨/悲伤/激昂等）",
+  "recommendedCategory": ["推荐的广告品类（1-3个）"],
+  "insertTiming": "建议（此刻/稍后/不建议）",
+  "confidence": 0.0-1.0,
+  "reasoning": "分析理由（1-2句话）"
+}
+只输出 JSON，不要其他文字。`;
+
+  try {
+    const raw = await llmVisionCall({
+      systemPrompt,
+      userPrompt: '请分析这一帧视频截图的场景信息，用于智能广告投放决策。',
+      imageBase64,
+      temperature: 0.3,
+      maxTokens: 600,
+    });
+    return JSON.parse(stripJsonFence(raw));
+  } catch {
+    return mockVisionAnalysis();
+  }
+}
+
 // ------------------------------------------------------------
-// 4. 契合度评分
+// 4. 契合度评分 — 向量召回 + LLM 重排混合链路
 // ------------------------------------------------------------
 
-export function scoreFitness(brand: BrandMaterial, scene: SceneDefinition) {
-  return mockFitnessScore(brand, scene);
+export async function scoreFitness(brand: BrandMaterial, scene: SceneDefinition) {
+  const status = getLLMStatus();
+  if (status.mock) {
+    return mockFitnessScore(brand, scene);
+  }
+
+  try {
+    const [brandVec, sceneVec] = await Promise.all([
+      embedBrand(brand),
+      embedScene(scene),
+    ]);
+    const semanticSim = cosineSimilarity(brandVec, sceneVec);
+    const categoryFit = scene.intrinsicFit[brand.category] ?? 0.5;
+
+    let llmScore = 0.5;
+    let llmReason = '';
+    try {
+      const raw = await llmCall({
+        systemPrompt: `你是广告-剧集契合度评估专家。给定一个品牌和一部剧集的信息，评估它们的匹配程度。
+输出严格 JSON：{ "score": 0.0-1.0, "reason": "一句话理由" }
+只输出 JSON。`,
+        userPrompt: `品牌：${brand.name}（${brand.category}）
+风格标签：${brand.styleTags.join('、')}
+广告文案：${brand.rawCopy}
+
+剧集：${scene.title}
+类型：${scene.genre}
+精神母题：${scene.signatureDialogue}
+可复用资产：${scene.reusableAssets.join('、')}
+
+请评估匹配度。`,
+        temperature: 0.2,
+        maxTokens: 200,
+      });
+      const parsed = JSON.parse(stripJsonFence(raw));
+      llmScore = parsed.score ?? 0.5;
+      llmReason = parsed.reason ?? '';
+    } catch {
+      llmScore = 0.5;
+    }
+
+    const finalScore = Math.round(100 * (semanticSim * 0.5 + categoryFit * 0.3 + llmScore * 0.2));
+    const score = Math.max(0, Math.min(100, finalScore));
+
+    let verdict: 'approved' | 'refactor' | 'rejected';
+    if (score >= 70) verdict = 'approved';
+    else if (score >= 50) verdict = 'refactor';
+    else verdict = 'rejected';
+
+    const reasons: string[] = [];
+    reasons.push(`语义相似度：${(semanticSim * 100).toFixed(0)}/100（向量检索）`);
+    reasons.push(`品类契合度：${(categoryFit * 100).toFixed(0)}/100`);
+    reasons.push(`LLM 精排：${(llmScore * 100).toFixed(0)}/100`);
+    if (llmReason) reasons.push(`AI 理由：${llmReason}`);
+    if (verdict === 'rejected') {
+      reasons.push('建议：走「AI 强制改造引擎」尝试挽救');
+    } else if (verdict === 'refactor') {
+      reasons.push('处于灰色区间：需强制 AI 二次剧情化改造');
+    } else {
+      reasons.push('达标，进入正常流量池');
+    }
+
+    return { score, verdict, reasons, categoryFit, styleFit: semanticSim, llmScore, llmReason };
+  } catch {
+    return mockFitnessScore(brand, scene);
+  }
+}
+
+/**
+ * 向量召回排序所有品牌
+ */
+export async function rankBrands(scene: SceneDefinition) {
+  return rankBrandsByEmbedding(scene);
 }
 
 // ------------------------------------------------------------
@@ -168,7 +284,7 @@ export async function repairCopyStream(params: {
       verdict: repair.verdict,
       strategy: repair.strategy,
     };
-  } catch (e) {
+  } catch {
     return {
       stream: mockTextStream(repair.repairedCopy, 30),
       newScore: repair.newScore,

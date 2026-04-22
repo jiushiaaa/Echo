@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeScene } from '@/lib/echo';
+import { analyzeScene, analyzeSceneVision } from '@/lib/echo';
 
-export const maxDuration = 15;
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    if (body.imageBase64) {
+      const result = await analyzeSceneVision(body.imageBase64);
+      return NextResponse.json(result);
+    }
+
     const sceneId = body.sceneId || 'qingyunian';
     const result = analyzeScene(sceneId);
     if (!result) {
