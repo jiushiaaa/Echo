@@ -21,6 +21,8 @@ type VisionResult = {
   insertTiming?: string;
   confidence?: number;
   reasoning?: string;
+  emotionCurve?: EmotionPoint[];
+  adWindows?: Array<{ startSec: number; endSec: number; reason: string }>;
 };
 
 const STEPS_TEMPLATE: string[] = [
@@ -56,6 +58,8 @@ export default function AnalyzeClient() {
   const [detectedObjects, setDetectedObjects] = useState<string[]>(PRESET_OBJECTS);
   const [error, setError] = useState<string | null>(null);
   const [isPreset, setIsPreset] = useState(false);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [analysisMode, setAnalysisMode] = useState<'image' | 'video' | 'preset'>('image');
   const fileRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
 
@@ -133,8 +137,37 @@ export default function AnalyzeClient() {
     [analyzeWithVision]
   );
 
+  const analyzeWithVideo = useCallback(async (url: string) => {
+    setError(null);
+    setIsPreset(false);
+    setAnalysisMode('video');
+    runStepAnimation(async () => {
+      try {
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoUrl: url }),
+        });
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
+        setVisionResult(data);
+        if (data.objects) setDetectedObjects(data.objects);
+        if (data.emotionCurve && data.emotionCurve.length > 0) {
+          // Dynamic curve from video analysis will be used via visionResult
+        }
+        setPhase('done');
+      } catch {
+        setVisionResult(null);
+        setDetectedObjects(PRESET_OBJECTS);
+        setPhase('done');
+        setError('视频分析 API 调用失败，已降级为预设数据');
+      }
+    });
+  }, [runStepAnimation]);
+
   const startPresetAnalysis = useCallback(() => {
     setIsPreset(true);
+    setAnalysisMode('preset');
     setError(null);
     runStepAnimation(() => {
       setVisionResult(null);
@@ -207,6 +240,37 @@ export default function AnalyzeClient() {
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
+          <div className="bordered-card p-4">
+            <div className="text-[11px] text-white/50 tracking-wider uppercase mb-3">
+              视频 URL 分析 · GLM-5V-Turbo
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                placeholder="粘贴视频链接（支持 mp4 等格式）"
+                className="flex-1 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-[#d4a574]/40 transition"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+              />
+              <button
+                className="btn btn-primary shrink-0"
+                disabled={!videoUrl.trim()}
+                onClick={() => analyzeWithVideo(videoUrl.trim())}
+              >
+                分析视频
+              </button>
+            </div>
+            <p className="text-white/30 text-[11px] mt-2">
+              GLM-5V-Turbo 可直接理解视频内容，分析场景、情绪变化和最佳广告插入时机
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-white/30 text-xs tracking-wider">或</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
           <button className="btn btn-primary w-full" onClick={startPresetAnalysis}>
             使用庆余年预设片段
           </button>
@@ -226,7 +290,7 @@ export default function AnalyzeClient() {
           )}
           <div className="bordered-card p-6">
             <div className="text-white/80 text-sm font-medium mb-5">
-              {isPreset ? '分析中...' : 'AI 视觉分析中...'}
+              {isPreset ? '分析中...' : analysisMode === 'video' ? 'AI 视频理解分析中...' : 'AI 视觉分析中...'}
             </div>
             <div className="flex flex-col gap-3">
               {steps.map((step) => (
@@ -261,7 +325,7 @@ export default function AnalyzeClient() {
               />
               {!isPreset && !error && (
                 <p className="text-[#22c55e]/60 text-[11px] mt-2 text-center">
-                  AI 视觉模型分析完成
+                  {analysisMode === 'video' ? 'GLM-5V-Turbo 视频理解分析完成' : 'AI 视觉模型分析完成'}
                 </p>
               )}
             </div>
@@ -277,7 +341,11 @@ export default function AnalyzeClient() {
             <SceneCard sceneType={sceneType} emotionTone={emotionTone} confidence={confidence} />
             <ObjectsCard objects={detectedObjects} />
             <EmotionCurveCard curve={emotionCurve} />
-            <AdWindowCard recommendedCats={recommendedCats} reasoning={reasoning} />
+            <AdWindowCard
+              recommendedCats={recommendedCats}
+              reasoning={reasoning}
+              adWindows={visionResult?.adWindows}
+            />
           </div>
 
           <button
@@ -287,6 +355,8 @@ export default function AnalyzeClient() {
               setUploadedImage(null);
               setVisionResult(null);
               setError(null);
+              setVideoUrl('');
+              setAnalysisMode('image');
               if (objectUrlRef.current) {
                 URL.revokeObjectURL(objectUrlRef.current);
                 objectUrlRef.current = null;
@@ -526,36 +596,60 @@ function EmotionCurveCard({ curve }: { curve: EmotionPoint[] }) {
   );
 }
 
-function AdWindowCard({ recommendedCats, reasoning }: { recommendedCats: string[]; reasoning?: string }) {
+function AdWindowCard({
+  recommendedCats,
+  reasoning,
+  adWindows,
+}: {
+  recommendedCats: string[];
+  reasoning?: string;
+  adWindows?: Array<{ startSec: number; endSec: number; reason: string }>;
+}) {
   return (
     <div className="bordered-card p-5 md:col-span-2">
       <div className="text-[11px] text-white/50 tracking-wider uppercase mb-4">
         推荐广告窗口
       </div>
       <div className="flex flex-col gap-4">
-        <div className="flex items-start gap-3 p-3 rounded-xl bg-[#22c55e]/10 border border-[#22c55e]/20">
-          <span className="w-2 h-2 rounded-full bg-[#22c55e] mt-1.5 shrink-0" />
-          <div>
-            <div className="text-white text-sm font-medium">
-              回府独白 · 1:42
+        {adWindows && adWindows.length > 0 ? (
+          adWindows.map((w, i) => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-[#22c55e]/10 border border-[#22c55e]/20">
+              <span className="w-2 h-2 rounded-full bg-[#22c55e] mt-1.5 shrink-0" />
+              <div>
+                <div className="text-white text-sm font-medium">
+                  {formatSec(w.startSec)} – {formatSec(w.endSec)}
+                </div>
+                <div className="text-white/60 text-xs mt-1">{w.reason}</div>
+              </div>
             </div>
-            <div className="text-white/60 text-xs mt-1">
-              张力值降至 0.31，情绪自然呼吸点
+          ))
+        ) : (
+          <>
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-[#22c55e]/10 border border-[#22c55e]/20">
+              <span className="w-2 h-2 rounded-full bg-[#22c55e] mt-1.5 shrink-0" />
+              <div>
+                <div className="text-white text-sm font-medium">
+                  回府独白 · 1:42
+                </div>
+                <div className="text-white/60 text-xs mt-1">
+                  张力值降至 0.31，情绪自然呼吸点
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="flex items-start gap-3 p-3 rounded-xl bg-[#ef4444]/10 border border-[#ef4444]/20">
-          <span className="w-2 h-2 rounded-full bg-[#ef4444] mt-1.5 shrink-0" />
-          <div>
-            <div className="text-white/60 text-sm font-medium">
-              <span className="text-[#ef4444]">NOT recommended:</span>{' '}
-              暗流涌现 · 0:58
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-[#ef4444]/10 border border-[#ef4444]/20">
+              <span className="w-2 h-2 rounded-full bg-[#ef4444] mt-1.5 shrink-0" />
+              <div>
+                <div className="text-white/60 text-sm font-medium">
+                  <span className="text-[#ef4444]">NOT recommended:</span>{' '}
+                  暗流涌现 · 0:58
+                </div>
+                <div className="text-white/40 text-xs mt-1">
+                  张力峰值 0.84，强行插入会打断沉浸
+                </div>
+              </div>
             </div>
-            <div className="text-white/40 text-xs mt-1">
-              张力峰值 0.84，强行插入会打断沉浸
-            </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {recommendedCats.length > 0 && (
           <div className="pt-2">
@@ -576,6 +670,12 @@ function AdWindowCard({ recommendedCats, reasoning }: { recommendedCats: string[
       </div>
     </div>
   );
+}
+
+function formatSec(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {

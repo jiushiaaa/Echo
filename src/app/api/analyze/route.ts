@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeScene, analyzeSceneVision } from '@/lib/echo';
+import { analyzeScene, analyzeSceneVision, analyzeVideoUrl } from '@/lib/echo';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    if (body.videoUrl) {
+      const result = await analyzeVideoUrl(body.videoUrl);
+      return NextResponse.json(result);
+    }
 
     if (body.imageBase64) {
       const result = await analyzeSceneVision(body.imageBase64);

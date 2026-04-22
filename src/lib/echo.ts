@@ -9,7 +9,7 @@
 import { ROLE_TONES, buildToneUserPrompt, TRANSITION_PROMPT, RETURN_PROMPT } from '@/data/prompts';
 import type { BrandMaterial } from '@/data/brands';
 import type { SceneDefinition } from '@/data/scenes';
-import { llmCall, llmStream, llmVisionCall, mockTextStream, getLLMStatus } from './llm';
+import { llmCall, llmStream, llmVisionCall, llmVideoCall, mockTextStream, getLLMStatus } from './llm';
 import { rankBrandsByEmbedding, cosineSimilarity, embedBrand, embedScene } from './embedding';
 import {
   mockToneCopy,
@@ -144,6 +144,49 @@ export async function analyzeSceneVision(imageBase64: string) {
       imageBase64,
       temperature: 0.3,
       maxTokens: 600,
+    });
+    return JSON.parse(stripJsonFence(raw));
+  } catch {
+    return mockVisionAnalysis();
+  }
+}
+
+/**
+ * 视频 URL 分析：GLM-5V-Turbo 直接理解视频内容，输出场景+情绪+广告位推荐
+ */
+export async function analyzeVideoUrl(videoUrl: string) {
+  const status = getLLMStatus();
+  if (status.mock) {
+    return mockVisionAnalysis();
+  }
+
+  const systemPrompt = `你是腾讯视频的 AI 视频场景分析引擎。给定一段视频，你需要分析其内容并输出以下 JSON：
+{
+  "sceneType": "场景类型（如：古装权谋/都市情感/科幻悬疑等）",
+  "objects": ["检测到的关键物体/角色/场景元素列表，5-8个"],
+  "emotionTone": "视频整体情绪基调变化（如：紧张→释然→温馨）",
+  "emotionCurve": [
+    {"t": 0, "tension": 0.3, "label": "开场"},
+    {"t": 10, "tension": 0.6, "label": "冲突"},
+    ...最多8个时间点
+  ],
+  "recommendedCategory": ["推荐的广告品类（1-3个）"],
+  "adWindows": [
+    {"startSec": 秒数, "endSec": 秒数, "reason": "为什么这个时间段适合插入广告"}
+  ],
+  "insertTiming": "最佳插入时机描述",
+  "confidence": 0.0-1.0,
+  "reasoning": "分析理由（2-3句话）"
+}
+只输出 JSON，不要其他文字。`;
+
+  try {
+    const raw = await llmVideoCall({
+      systemPrompt,
+      userPrompt: '请深度分析这段视频的场景、情绪变化和最佳广告插入时机，用于智能广告编排决策。',
+      videoUrl,
+      temperature: 0.3,
+      maxTokens: 1200,
     });
     return JSON.parse(stripJsonFence(raw));
   } catch {

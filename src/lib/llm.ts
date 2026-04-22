@@ -5,10 +5,10 @@
  * 通过环境变量切换：OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL
  *
  * 支持四种模型角色：
- *   OPENAI_MODEL          → 主文本模型（过渡语/情绪/修复）
- *   OPENAI_VISION_MODEL   → 视觉模型（场景分析）
- *   OPENAI_EMBEDDING_MODEL→ 向量模型（品牌匹配）
- *   OPENAI_LONG_MODEL     → 长上下文模型（整集分析）
+ *   OPENAI_MODEL          → 主文本模型 glm-4.7-flashx（过渡语/情绪/修复）
+ *   OPENAI_VISION_MODEL   → 视觉模型 glm-5v-turbo（图片+视频分析）
+ *   OPENAI_EMBEDDING_MODEL→ 向量模型 embedding-3（品牌匹配）
+ *   OPENAI_LONG_MODEL     → 长上下文模型 glm-4-long（整集分析）
  * ============================================================
  */
 
@@ -50,8 +50,8 @@ function getClient() {
   return _client;
 }
 
-const getModel = () => process.env.OPENAI_MODEL || 'gpt-4o-mini';
-const getVisionModel = () => process.env.OPENAI_VISION_MODEL || 'glm-4v-flash';
+const getModel = () => process.env.OPENAI_MODEL || 'glm-4.7-flashx';
+const getVisionModel = () => process.env.OPENAI_VISION_MODEL || 'glm-5v-turbo';
 const getLongModel = () => process.env.OPENAI_LONG_MODEL || 'glm-4-long';
 const getEmbeddingModel = () => process.env.OPENAI_EMBEDDING_MODEL || 'embedding-3';
 
@@ -146,6 +146,41 @@ export async function llmVisionCall(opts: {
     temperature: opts.temperature ?? 0.3,
     max_tokens: opts.maxTokens ?? 800,
   });
+  return resp.choices[0]?.message?.content?.trim() ?? '';
+}
+
+/**
+ * 视觉模型调用（视频 URL 输入）：GLM-5V-Turbo 支持直接传入视频 URL 进行分析
+ */
+export async function llmVideoCall(opts: {
+  systemPrompt: string;
+  userPrompt: string;
+  videoUrl: string;
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string> {
+  if (isMockMode()) {
+    throw new Error('MOCK_MODE');
+  }
+  const client = getClient()!;
+  const resp = await client.chat.completions.create({
+    model: getVisionModel(),
+    messages: [
+      { role: 'system', content: opts.systemPrompt },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'video_url' as any,
+            video_url: { url: opts.videoUrl },
+          } as any,
+          { type: 'text', text: opts.userPrompt },
+        ],
+      },
+    ],
+    temperature: opts.temperature ?? 0.3,
+    max_tokens: opts.maxTokens ?? 1200,
+  } as any);
   return resp.choices[0]?.message?.content?.trim() ?? '';
 }
 
