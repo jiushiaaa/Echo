@@ -8,10 +8,9 @@ import LLMStatusBadge from './LLMStatusBadge';
 
 const NAV = [
   { href: '/', label: '首页' },
-  { href: '/compare', label: '核心对比' },
-  { href: '/mirror', label: '情绪镜像' },
-  { href: '/governance', label: '品味守门人' },
-  { href: '/value', label: '三方价值' },
+  { href: '/analyze', label: 'AI 预分析' },
+  { href: '/match', label: '品牌匹配' },
+  { href: '/compare', label: '对比演示' },
 ];
 
 export default function TopNav() {

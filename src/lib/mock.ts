@@ -34,15 +34,11 @@ export function mockToneCopy(params: {
   if (params.emotionOverride === 'heartache') {
     const endings: Record<string, string> = {
       fanxian: '但有些等待，值得被好好兑现。',
-      luoji:   '这是文明，留给彼此的唯一温柔。',
-      baozong: '人情到底比生意长——这道理，侬要记住。',
     };
     text = text.replace(/[。！]$/, '。') + endings[params.roleId] ?? '';
   } else if (params.emotionOverride === 'catharsis') {
     const endings: Record<string, string> = {
       fanxian: '这一回，换我追风。',
-      luoji:   '这一次，我们回望宇宙。',
-      baozong: '这生意，侬做定了。',
     };
     text = text.replace(/[。！]$/, '。') + endings[params.roleId] ?? '';
   }
@@ -170,8 +166,6 @@ export function mockFitnessScore(brand: BrandMaterial, scene: SceneDefinition) {
   // 风格 tag 契合度：粗略根据剧集"标签库"打分
   const sceneStyleMap: Record<string, string[]> = {
     qingyunian: ['古装', '吐槽', '现代', '理性', '文化', '权谋', '成长'],
-    santi: ['科技', '理性', '冷感', '宇宙', '精密', '未来', '速度'],
-    fanhua: ['年代', '商海', '沪式', '复古', '精致', '霓虹', '面子', '高贵'],
   };
   const sceneTags = sceneStyleMap[scene.id] ?? [];
   let styleHit = 0;
@@ -219,14 +213,6 @@ export function mockRepair(params: {
       '世上讲究"合身"——玉佩合人，衣袖合袖。Vermeer 之作，不过是一件真正合你的物件。',
     'qingyunian-glowup':
       '京都的晨光，照见的不过是一张真实的脸。GlowUp 不添墨，只让光按它该来的样子来。',
-    'santi-vermeer':
-      '在四光年之外，人类文明留下的唯一痕迹，是被时间磨亮的细节。Vermeer——对得起这段宇宙的注视。',
-    'santi-babygrow':
-      '当人类学会守护自己的坐标，也开始守护一个更小的坐标。BabyGrow 柔净系列，从第一声啼哭起的文明。',
-    'fanhua-neongame':
-      '做生意讲究个"入戏"——人情是戏，规矩也是戏。《霓境》里的江湖，也是这个理。',
-    'fanhua-eduplus':
-      '黄河路上的规矩没进书，但比任何书都深。EduPlus——让孩子早一步学会"会算账"。',
   };
 
   const key = `${params.scene.id}-${params.brand.id}`;

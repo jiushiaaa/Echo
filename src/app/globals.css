@@ -428,7 +428,35 @@ main, header, footer {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 1;
   background:
-    radial-gradient(ellipse 1100px 500px at 50% -10%, rgba(212, 165, 116, 0.12), transparent 55%),
+    radial-gradient(ellipse 1100px 500px at 50% -10%, rgba(212, 165, 116, 0.10), transparent 55%),
     radial-gradient(ellipse 900px 600px at 50% 100%, rgba(30, 30, 40, 0.85), transparent 70%);
+}
+
+/* Hero 背景图缓慢漂移动画 */
+@keyframes heroBgDrift {
+  0%   { transform: scale(1.06) translate(0px, 0px); }
+  33%  { transform: scale(1.08) translate(-6px, -4px); }
+  66%  { transform: scale(1.06) translate(4px, -6px); }
+  100% { transform: scale(1.06) translate(0px, 0px); }
+}
+
+.hero-bg-drift {
+  animation: heroBgDrift 18s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ===== Scroll reveal ===== */
+.reveal {
+  opacity: 0;
+  transform: translateY(48px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
 }

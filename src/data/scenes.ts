@@ -21,7 +21,7 @@ export type EmotionCurvePoint = {
 };
 
 export type SceneDefinition = {
-  id: 'qingyunian' | 'santi' | 'fanhua';
+  id: 'qingyunian';
   title: string;
   subtitle: string;
   genre: string;
@@ -50,7 +50,8 @@ export type SceneDefinition = {
 
 export type HeroAdAsset = {
   kind: 'video' | 'fallback-card';
-  videoSrc?: string;              // 视频路径（如 Day 3 产出）
+  videoSrc?: string;              // Echo 原生广告视频路径
+  realAdSrc?: string;             // 真实硬广视频路径（左屏用）
   fallbackFrames: Array<{
     bgGradient: string;
     headline: string;
@@ -104,26 +105,22 @@ const QINGYUNIAN: SceneDefinition = {
   reusableAssets: ['范闲独白', '鉴查院腰牌', '京都城门', '庆帝的冷笑', '监察使令牌'],
   heroAd: {
     kind: 'video',
-    videoSrc: '/ads/qingyunian-hero.mp4', // Day 3 产出，未产出则用 fallbackFrames
-    duration: 7,
-    brandName: '星骁 X3 Pro',
-    brandCategory: '3C 手机',
-    sellingPoint: '快充 · 30 秒充电 10 小时续航',
+    videoSrc: '/ads/qingyunian-hero.mp4',
+    realAdSrc: '/ads/qingyunian.mp4',     // 真实硬广：飞鹤卓睿奶粉
+    duration: 30,
+    brandName: '飞鹤卓睿',
+    brandCategory: '母婴',
+    sellingPoint: '0-36月专研配方 · 卓睿系列婴幼儿奶粉',
     fallbackFrames: [
       {
         bgGradient: 'linear-gradient(135deg, #1a120a 0%, #3f2e1a 100%)',
-        headline: '这世上本无快慢',
-        footline: '只是等不了的人太多',
+        headline: '飞鹤卓睿',
+        footline: '专为中国宝宝研制',
       },
       {
         bgGradient: 'linear-gradient(135deg, #3f2e1a 0%, #caa45d 100%)',
-        headline: '三十秒，续上十个时辰',
-        footline: '比我当年跑过京都城还快',
-      },
-      {
-        bgGradient: 'linear-gradient(135deg, #2a1a08 0%, #e8c987 100%)',
-        headline: '星骁 X3 Pro · 快充系列',
-        footline: '鉴查院 · 范闲推荐',
+        headline: '0-36月黄金营养方案',
+        footline: '卓睿三段 · 科学喂养',
       },
     ],
   },
@@ -149,163 +146,7 @@ const QINGYUNIAN: SceneDefinition = {
   },
 };
 
-// ============================================================
-// 场景 2：三体
-// ============================================================
-const SANTI: SceneDefinition = {
-  id: 'santi',
-  title: '三体',
-  subtitle: '黑暗森林，文明对视',
-  genre: '硬核科幻 · 宇宙悲悯',
-  eraLabel: '当代地球',
-  roleToneId: 'luoji',
-  poster: {
-    mainColor: '#3b82f6',
-    accentColor: '#7aa7ff',
-    bgGradient: 'linear-gradient(135deg, #04081a 0%, #0c1a2b 60%, #0e2647 100%)',
-    motif: '三',
-    pattern: 'radial-dots',
-  },
-  tagline: '黑暗森林 · 宇宙尺度 · 冷峻悲悯',
-  signatureDialogue: '给岁月以文明，不给文明以岁月。',
-  emotionCurve: [
-    { t: 0,   tension: 0.24, label: '深夜独坐' },
-    { t: 20,  tension: 0.35, label: '接到警告' },
-    { t: 42,  tension: 0.68, label: '物理学不存在了' },
-    { t: 66,  tension: 0.88, label: '坐标暴露' },
-    { t: 88,  tension: 0.56, label: '冷静下来' },
-    { t: 110, tension: 0.29, label: '望向星空' },
-    { t: 130, tension: 0.25, label: '决心面壁' },
-  ],
-  duration: 150,
-  tightMoment:   { t: 66, label: '坐标暴露 · 1:06 紧张峰值' },
-  relaxedMoment: { t: 110, label: '望向星空 · 1:50 情绪谷底' },
-  reusableAssets: ['黑暗森林法则', '智子', '面壁者', '光年', '三体文明警告'],
-  heroAd: {
-    kind: 'fallback-card',
-    duration: 7,
-    brandName: '星骁 X3 Pro',
-    brandCategory: '3C 手机',
-    sellingPoint: '快充 · 30 秒充电 10 小时续航',
-    fallbackFrames: [
-      {
-        bgGradient: 'linear-gradient(135deg, #04081a 0%, #0c1a2b 100%)',
-        headline: '黑暗森林里',
-        footline: '每一个文明都在隐藏自己',
-      },
-      {
-        bgGradient: 'linear-gradient(135deg, #0c1a2b 0%, #0e2647 100%)',
-        headline: '电量是文明的底气',
-        footline: '三十秒，一个夜晚的安全区',
-      },
-      {
-        bgGradient: 'linear-gradient(135deg, #0e2647 0%, #3b82f6 100%)',
-        headline: '星骁 X3 Pro · 续航系列',
-        footline: '坐标可以隐藏 · 电量不必',
-      },
-    ],
-  },
-  narrativePack: {
-    title: '罗辑独白 · 关于沉默',
-    subtitle: '品牌定制 · 30 秒平行剧情',
-    monologue:
-      '在四光年之外，有人在倾听。人类所有的语言，最终都会被翻译成一个坐标。我们能做的，是选择什么时候沉默。沉默不是放弃，是对这个宇宙最大的尊重。有些东西必须留在身边——比如电量，比如警惕，比如不说出口的那句话。',
-    voiceHint: '男声 · 低沉克制，语速偏慢，每句有停顿',
-    unlockHint: '罗辑独白 · 关于沉默 (00:30)',
-  },
-  intrinsicFit: {
-    '3C 手机':    0.82,
-    '快销食品':   0.35,
-    '奢侈品':    0.28,
-    '汽车':      0.74,
-    '母婴':      0.22,
-    '游戏':      0.79,
-    '文旅':      0.58,
-    '教育':      0.72,
-    '美妆':      0.24,
-    '金融保险':  0.51,
-  },
-};
-
-// ============================================================
-// 场景 3：繁花
-// ============================================================
-const FANHUA: SceneDefinition = {
-  id: 'fanhua',
-  title: '繁花',
-  subtitle: '黄河路上，做生意的腔调',
-  genre: '年代商战 · 沪式腔调',
-  eraLabel: '九十年代上海',
-  roleToneId: 'baozong',
-  poster: {
-    mainColor: '#d4405a',
-    accentColor: '#ff8aa0',
-    bgGradient: 'linear-gradient(135deg, #1a0510 0%, #2b0e15 50%, #4a1320 100%)',
-    motif: '花',
-    pattern: 'neon-lines',
-  },
-  tagline: '沪语腔调 · 商海做派 · 霓虹夜色',
-  signatureDialogue: '生意是这样——你看起来在谈价钱，其实在谈做人。',
-  emotionCurve: [
-    { t: 0,   tension: 0.35, label: '和平饭店' },
-    { t: 24,  tension: 0.58, label: '谈判开场' },
-    { t: 48,  tension: 0.82, label: '底牌翻出' },
-    { t: 72,  tension: 0.9,  label: '僵持时刻' },
-    { t: 90,  tension: 0.72, label: '敬酒让步' },
-    { t: 112, tension: 0.41, label: '夜半独坐' },
-    { t: 130, tension: 0.3,  label: '霓虹深处' },
-  ],
-  duration: 150,
-  tightMoment:   { t: 72, label: '谈判僵持 · 1:12 紧张峰值' },
-  relaxedMoment: { t: 112, label: '夜半独坐 · 1:52 情绪谷底' },
-  reusableAssets: ['和平饭店', '黄河路霓虹', '西装内袋', '钢笔签字', '英文支票簿'],
-  heroAd: {
-    kind: 'fallback-card',
-    duration: 7,
-    brandName: '星骁 X3 Pro',
-    brandCategory: '3C 手机',
-    sellingPoint: '快充 · 30 秒充电 10 小时续航',
-    fallbackFrames: [
-      {
-        bgGradient: 'linear-gradient(135deg, #1a0510 0%, #2b0e15 100%)',
-        headline: '做生意讲究个',
-        footline: '随时能接电话',
-      },
-      {
-        bgGradient: 'linear-gradient(135deg, #2b0e15 0%, #4a1320 100%)',
-        headline: '侬这手机没电',
-        footline: '等于把面子关进抽屉',
-      },
-      {
-        bgGradient: 'linear-gradient(135deg, #4a1320 0%, #d4405a 100%)',
-        headline: '星骁 X3 Pro · 快充系列',
-        footline: '三十秒 · 面子就回来',
-      },
-    ],
-  },
-  narrativePack: {
-    title: '宝总独白 · 关于面子',
-    subtitle: '品牌定制 · 30 秒平行剧情',
-    monologue:
-      '黄河路上的灯，每一盏都是人情。你今天请我一桌，不是吃饭，是在借我一个人情。生意场上，面子比里子更贵——里子你看不到，面子是别人看到的你。做人要讲究个留白，物件要讲究个妥帖。一只随时能用的手机，就是随时接住别人抛过来的面子。',
-    voiceHint: '男声 · 克制温和，尾音带沪式语感，偶尔一声轻笑',
-    unlockHint: '宝总独白 · 关于面子 (00:32)',
-  },
-  intrinsicFit: {
-    '3C 手机':    0.74,
-    '快销食品':   0.55,
-    '奢侈品':    0.86,
-    '汽车':      0.81,
-    '母婴':      0.32,
-    '游戏':      0.28,
-    '文旅':      0.78,
-    '教育':      0.38,
-    '美妆':      0.72,
-    '金融保险':  0.83,
-  },
-};
-
-export const SCENES: SceneDefinition[] = [QINGYUNIAN, SANTI, FANHUA];
+export const SCENES: SceneDefinition[] = [QINGYUNIAN];
 
 export function getScene(id: string) {
   return SCENES.find((s) => s.id === id);
@@ -314,8 +155,17 @@ export function getScene(id: string) {
 /**
  * 硬广（改造前）文案池——刻意平庸、通用、硬塞
  */
+export const MISMATCH_AD = {
+  brandName: '护舒宝',
+  videoSrc: '/ads/fanhua.mp4',
+  duration: 30,
+  brandCategory: '个护',
+  sellingPoint: '液体卫生巾 · 零感护理',
+};
+
 export const HARD_AD = {
   brandName: '星骁 X3 Pro',
+  videoSrc: '/ads/hard-ad.mp4',
   duration: 15,
   frames: [
     {
