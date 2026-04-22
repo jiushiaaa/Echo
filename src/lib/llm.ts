@@ -150,7 +150,7 @@ export async function llmVisionCall(opts: {
 }
 
 /**
- * 视觉模型调用（视频 URL 输入）：GLM-5V-Turbo 支持直接传入视频 URL 进行分析
+ * 视觉模型调用（视频输入）：支持公网 URL 和 data:video/mp4;base64,... data URI
  */
 export async function llmVideoCall(opts: {
   systemPrompt: string;
@@ -181,6 +181,46 @@ export async function llmVideoCall(opts: {
     temperature: opts.temperature ?? 0.3,
     max_tokens: opts.maxTokens ?? 1200,
   } as any);
+  return resp.choices[0]?.message?.content?.trim() ?? '';
+}
+
+/**
+ * 多帧图片分析：将多张关键帧截图同时传给视觉模型
+ */
+export async function llmMultiFrameCall(opts: {
+  systemPrompt: string;
+  userPrompt: string;
+  framesBase64: string[];
+  temperature?: number;
+  maxTokens?: number;
+}): Promise<string> {
+  if (isMockMode()) {
+    throw new Error('MOCK_MODE');
+  }
+  const client = getClient()!;
+
+  const imageContent = opts.framesBase64.map((b64) => ({
+    type: 'image_url' as const,
+    image_url: {
+      url: b64.startsWith('data:') ? b64 : `data:image/jpeg;base64,${b64}`,
+    },
+  }));
+
+  const resp = await client.chat.completions.create({
+    model: getVisionModel(),
+    messages: [
+      { role: 'system', content: opts.systemPrompt },
+      {
+        role: 'user',
+        content: [
+          ...imageContent,
+          { type: 'text', text: opts.userPrompt },
+        ],
+      },
+    ],
+    temperature: opts.temperature ?? 0.3,
+    max_tokens: opts.maxTokens ?? 1200,
+  });
   return resp.choices[0]?.message?.content?.trim() ?? '';
 }
 

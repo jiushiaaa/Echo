@@ -9,7 +9,7 @@
 import { ROLE_TONES, buildToneUserPrompt, TRANSITION_PROMPT, RETURN_PROMPT } from '@/data/prompts';
 import type { BrandMaterial } from '@/data/brands';
 import type { SceneDefinition } from '@/data/scenes';
-import { llmCall, llmStream, llmVisionCall, llmVideoCall, mockTextStream, getLLMStatus } from './llm';
+import { llmCall, llmStream, llmVisionCall, llmVideoCall, llmMultiFrameCall, mockTextStream, getLLMStatus } from './llm';
 import { rankBrandsByEmbedding, cosineSimilarity, embedBrand, embedScene } from './embedding';
 import {
   mockToneCopy,
@@ -192,6 +192,76 @@ export async function analyzeVideoUrl(videoUrl: string) {
   } catch {
     return mockVisionAnalysis();
   }
+}
+
+/**
+ * 本地视频 base64 分析：
+ * 策略 1：尝试用 data URI 直接传给视觉模型（GLM-5V-Turbo 可能支持）
+ * 策略 2：如果策略 1 失败，将 base64 视频中提取的关键帧图片传给视觉模型做多帧分析
+ */
+export async function analyzeVideoBase64(videoBase64: string, keyFrames?: string[]) {
+  const status = getLLMStatus();
+  if (status.mock) {
+    return { ...mockVisionAnalysis(), _method: 'mock' };
+  }
+
+  const systemPrompt = `你是腾讯视频的 AI 视频场景分析引擎。给定一段视频或视频关键帧，你需要分析其内容并输出以下 JSON：
+{
+  "sceneType": "场景类型（如：古装权谋/都市情感/科幻悬疑等）",
+  "objects": ["检测到的关键物体/角色/场景元素列表，5-8个"],
+  "emotionTone": "视频整体情绪基调变化（如：紧张→释然→温馨）",
+  "emotionCurve": [
+    {"t": 0, "tension": 0.3, "label": "开场"},
+    {"t": 10, "tension": 0.6, "label": "冲突"}
+  ],
+  "recommendedCategory": ["推荐的广告品类（1-3个）"],
+  "adWindows": [
+    {"startSec": 秒数, "endSec": 秒数, "reason": "为什么这个时间段适合插入广告"}
+  ],
+  "insertTiming": "最佳插入时机描述",
+  "confidence": 0.0-1.0,
+  "reasoning": "分析理由（2-3句话）"
+}
+只输出 JSON，不要其他文字。`;
+
+  const userPrompt = '请深度分析这段视频的场景、情绪变化和最佳广告插入时机，用于智能广告编排决策。';
+
+  // 策略 1：尝试 data URI 直接传视频
+  try {
+    const dataUri = videoBase64.startsWith('data:')
+      ? videoBase64
+      : `data:video/mp4;base64,${videoBase64}`;
+
+    const raw = await llmVideoCall({
+      systemPrompt,
+      userPrompt,
+      videoUrl: dataUri,
+      temperature: 0.3,
+      maxTokens: 1200,
+    });
+    return { ...JSON.parse(stripJsonFence(raw)), _method: 'video-base64' };
+  } catch {
+    // 策略 1 失败，尝试策略 2
+  }
+
+  // 策略 2：多关键帧图片分析
+  if (keyFrames && keyFrames.length > 0) {
+    try {
+      const raw = await llmMultiFrameCall({
+        systemPrompt: systemPrompt.replace('给定一段视频或视频关键帧', '给定一组视频关键帧截图（按时间顺序排列）'),
+        userPrompt: `这是视频中提取的 ${keyFrames.length} 张关键帧截图（按时间顺序），请综合分析视频内容。`,
+        framesBase64: keyFrames,
+        temperature: 0.3,
+        maxTokens: 1200,
+      });
+      return { ...JSON.parse(stripJsonFence(raw)), _method: 'multi-frame' };
+    } catch {
+      // 策略 2 也失败
+    }
+  }
+
+  // 所有策略失败，降级为 mock
+  return { ...mockVisionAnalysis(), _method: 'fallback' };
 }
 
 // ------------------------------------------------------------

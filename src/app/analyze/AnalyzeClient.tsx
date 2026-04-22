@@ -23,6 +23,7 @@ type VisionResult = {
   reasoning?: string;
   emotionCurve?: EmotionPoint[];
   adWindows?: Array<{ startSec: number; endSec: number; reason: string }>;
+  _method?: 'video-base64' | 'multi-frame' | 'fallback' | 'mock';
 };
 
 const STEPS_TEMPLATE: string[] = [
@@ -46,28 +47,104 @@ const PRESET_OBJECTS = [
   '范闲独白', '鉴查院腰牌', '京都城门', '庆帝的冷笑', '监察使令牌',
 ];
 
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ACCEPTED_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
+
+const MAX_VIDEO_SIZE_MB = 20;
+
+function extractVideoKeyFrames(videoFile: File, count = 8): Promise<{ frames: string[]; thumbnail: string }> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.muted = true;
+    const url = URL.createObjectURL(videoFile);
+    video.src = url;
+
+    video.onloadeddata = () => {
+      const duration = video.duration;
+      const times: number[] = [];
+      for (let i = 0; i < count; i++) {
+        times.push((duration * (i + 0.5)) / count);
+      }
+
+      const canvas = document.createElement('canvas');
+      const maxDim = 720;
+      const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error('Canvas not supported'));
+        return;
+      }
+
+      const frames: string[] = [];
+      let idx = 0;
+
+      const captureNext = () => {
+        if (idx >= times.length) {
+          URL.revokeObjectURL(url);
+          resolve({ frames, thumbnail: frames[0] || '' });
+          return;
+        }
+        video.currentTime = times[idx];
+      };
+
+      video.onseeked = () => {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        frames.push(canvas.toDataURL('image/jpeg', 0.75));
+        idx++;
+        captureNext();
+      };
+
+      captureNext();
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Video load failed'));
+    };
+  });
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function AnalyzeClient() {
   const [phase, setPhase] = useState<'idle' | 'analyzing' | 'done'>('idle');
   const [steps, setSteps] = useState<AnalysisStep[]>(
     STEPS_TEMPLATE.map((label) => ({ label, status: 'pending' }))
   );
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedVideo, setUploadedVideo] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [visionResult, setVisionResult] = useState<VisionResult | null>(null);
-  const [emotionCurve] = useState<EmotionPoint[]>(PRESET_EMOTION_CURVE);
+  const [emotionCurve, setEmotionCurve] = useState<EmotionPoint[]>(PRESET_EMOTION_CURVE);
   const [detectedObjects, setDetectedObjects] = useState<string[]>(PRESET_OBJECTS);
   const [error, setError] = useState<string | null>(null);
   const [isPreset, setIsPreset] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
-  const [analysisMode, setAnalysisMode] = useState<'image' | 'video' | 'preset'>('image');
+  const [analysisMode, setAnalysisMode] = useState<'image' | 'video-file' | 'video-url' | 'preset'>('image');
   const fileRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
-    };
+  const revokeObjectUrl = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
   }, []);
+
+  useEffect(() => {
+    return revokeObjectUrl;
+  }, [revokeObjectUrl]);
 
   const runStepAnimation = useCallback((onDone: () => void) => {
     setPhase('analyzing');
@@ -109,23 +186,26 @@ export default function AnalyzeClient() {
         const data = await res.json();
         setVisionResult(data);
         if (data.objects) setDetectedObjects(data.objects);
+        if (data.emotionCurve?.length > 0) setEmotionCurve(data.emotionCurve);
         setPhase('done');
       } catch {
         setVisionResult(null);
         setDetectedObjects(PRESET_OBJECTS);
+        setEmotionCurve(PRESET_EMOTION_CURVE);
         setPhase('done');
         setError('视觉分析 API 调用失败，已降级为预设数据');
       }
     });
   }, [runStepAnimation]);
 
-  const handleFile = useCallback(
+  const handleImageFile = useCallback(
     (file: File) => {
-      if (!file.type.startsWith('image/')) return;
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+      revokeObjectUrl();
       const url = URL.createObjectURL(file);
       objectUrlRef.current = url;
       setUploadedImage(url);
+      setUploadedVideo(null);
+      setAnalysisMode('image');
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -134,13 +214,81 @@ export default function AnalyzeClient() {
       };
       reader.readAsDataURL(file);
     },
-    [analyzeWithVision]
+    [analyzeWithVision, revokeObjectUrl]
   );
 
-  const analyzeWithVideo = useCallback(async (url: string) => {
+  const handleVideoFile = useCallback(
+    async (file: File) => {
+      revokeObjectUrl();
+      const url = URL.createObjectURL(file);
+      objectUrlRef.current = url;
+      setUploadedVideo(url);
+      setUploadedImage(null);
+      setAnalysisMode('video-file');
+      setError(null);
+      setIsPreset(false);
+
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > MAX_VIDEO_SIZE_MB) {
+        setError(`视频文件过大（${sizeMB.toFixed(1)}MB），上限 ${MAX_VIDEO_SIZE_MB}MB，请压缩后重试或使用 URL 分析`);
+        return;
+      }
+
+      try {
+        const [videoBase64, { frames, thumbnail }] = await Promise.all([
+          fileToBase64(file),
+          extractVideoKeyFrames(file, 8),
+        ]);
+        if (thumbnail) setUploadedImage(thumbnail);
+
+        runStepAnimation(async () => {
+          try {
+            const res = await fetch('/api/analyze', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ videoBase64, keyFrames: frames }),
+            });
+            if (!res.ok) throw new Error('API error');
+            const data = await res.json();
+            setVisionResult(data);
+            if (data.objects) setDetectedObjects(data.objects);
+            if (data.emotionCurve?.length > 0) setEmotionCurve(data.emotionCurve);
+            setPhase('done');
+          } catch {
+            setVisionResult(null);
+            setDetectedObjects(PRESET_OBJECTS);
+            setEmotionCurve(PRESET_EMOTION_CURVE);
+            setPhase('done');
+            setError('视频分析 API 调用失败，已降级为预设数据');
+          }
+        });
+      } catch {
+        setError('视频文件读取失败，请尝试粘贴视频 URL');
+        setUploadedVideo(null);
+      }
+    },
+    [runStepAnimation, revokeObjectUrl]
+  );
+
+  const handleFile = useCallback(
+    (file: File) => {
+      if (ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+        handleImageFile(file);
+      } else if (ACCEPTED_VIDEO_TYPES.includes(file.type)) {
+        handleVideoFile(file);
+      } else {
+        setError('不支持的文件格式，请上传图片（JPG/PNG/WebP）或视频（MP4/WebM）');
+      }
+    },
+    [handleImageFile, handleVideoFile]
+  );
+
+  const analyzeWithVideoUrl = useCallback(async (url: string) => {
     setError(null);
     setIsPreset(false);
-    setAnalysisMode('video');
+    setAnalysisMode('video-url');
+    setUploadedImage(null);
+    setUploadedVideo(null);
     runStepAnimation(async () => {
       try {
         const res = await fetch('/api/analyze', {
@@ -152,15 +300,14 @@ export default function AnalyzeClient() {
         const data = await res.json();
         setVisionResult(data);
         if (data.objects) setDetectedObjects(data.objects);
-        if (data.emotionCurve && data.emotionCurve.length > 0) {
-          // Dynamic curve from video analysis will be used via visionResult
-        }
+        if (data.emotionCurve?.length > 0) setEmotionCurve(data.emotionCurve);
         setPhase('done');
       } catch {
         setVisionResult(null);
         setDetectedObjects(PRESET_OBJECTS);
+        setEmotionCurve(PRESET_EMOTION_CURVE);
         setPhase('done');
-        setError('视频分析 API 调用失败，已降级为预设数据');
+        setError('视频 URL 分析失败，已降级为预设数据');
       }
     });
   }, [runStepAnimation]);
@@ -194,11 +341,29 @@ export default function AnalyzeClient() {
     [handleFile]
   );
 
+  const resetAll = useCallback(() => {
+    setPhase('idle');
+    setUploadedImage(null);
+    setUploadedVideo(null);
+    setVisionResult(null);
+    setError(null);
+    setVideoUrl('');
+    setAnalysisMode('image');
+    setEmotionCurve(PRESET_EMOTION_CURVE);
+    revokeObjectUrl();
+  }, [revokeObjectUrl]);
+
   const sceneType = visionResult?.sceneType || '古装权谋 · 现代灵魂';
   const emotionTone = visionResult?.emotionTone || '紧张→释然';
   const confidence = visionResult?.confidence;
   const recommendedCats = visionResult?.recommendedCategory || ['3C 手机', '文旅', '游戏'];
   const reasoning = visionResult?.reasoning;
+
+  const analysisLabel =
+    analysisMode === 'video-url' ? 'GLM-5V-Turbo 视频理解分析'
+    : analysisMode === 'video-file' ? 'AI 视频关键帧分析'
+    : analysisMode === 'preset' ? '预设场景分析'
+    : 'AI 视觉分析';
 
   return (
     <div className="flex flex-col gap-8">
@@ -219,17 +384,20 @@ export default function AnalyzeClient() {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/mp4,video/webm,video/ogg,video/quicktime"
               className="hidden"
               onChange={onFileChange}
             />
             <UploadIcon />
             <div className="text-center">
               <p className="text-white/80 text-sm font-medium">
-                拖拽图片到此处，或点击选择文件
+                拖拽图片或视频到此处，或点击选择文件
               </p>
               <p className="text-white/40 text-xs mt-1">
-                支持 JPG / PNG / WebP · AI 将分析场景内容
+                支持 JPG / PNG / WebP / MP4 / WebM · AI 将分析场景内容
+              </p>
+              <p className="text-white/25 text-[10px] mt-1">
+                视频上限 {MAX_VIDEO_SIZE_MB}MB · 支持 base64 直传 + 多关键帧双链路分析
               </p>
             </div>
           </div>
@@ -242,12 +410,12 @@ export default function AnalyzeClient() {
 
           <div className="bordered-card p-4">
             <div className="text-[11px] text-white/50 tracking-wider uppercase mb-3">
-              视频 URL 分析 · GLM-5V-Turbo
+              视频 URL 分析 · GLM-5V-Turbo · 完整视频理解
             </div>
             <div className="flex gap-2">
               <input
                 type="url"
-                placeholder="粘贴视频链接（支持 mp4 等格式）"
+                placeholder="粘贴视频链接（支持 mp4 等公网可访问 URL）"
                 className="flex-1 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-[#d4a574]/40 transition"
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
@@ -255,7 +423,7 @@ export default function AnalyzeClient() {
               <button
                 className="btn btn-primary shrink-0"
                 disabled={!videoUrl.trim()}
-                onClick={() => analyzeWithVideo(videoUrl.trim())}
+                onClick={() => analyzeWithVideoUrl(videoUrl.trim())}
               >
                 分析视频
               </button>
@@ -279,7 +447,20 @@ export default function AnalyzeClient() {
 
       {phase === 'analyzing' && (
         <div className="flex flex-col gap-6">
-          {uploadedImage && (
+          {uploadedVideo && (
+            <div className="bordered-card p-3">
+              <video
+                src={uploadedVideo}
+                className="w-full max-h-48 rounded-lg object-contain"
+                controls={false}
+                muted
+              />
+              <p className="text-white/40 text-[11px] mt-2 text-center">
+                AI 视频分析中…（base64 直传 + 关键帧双链路）
+              </p>
+            </div>
+          )}
+          {!uploadedVideo && uploadedImage && (
             <div className="bordered-card p-3">
               <img
                 src={uploadedImage}
@@ -290,7 +471,7 @@ export default function AnalyzeClient() {
           )}
           <div className="bordered-card p-6">
             <div className="text-white/80 text-sm font-medium mb-5">
-              {isPreset ? '分析中...' : analysisMode === 'video' ? 'AI 视频理解分析中...' : 'AI 视觉分析中...'}
+              {analysisLabel}中…
             </div>
             <div className="flex flex-col gap-3">
               {steps.map((step) => (
@@ -316,7 +497,26 @@ export default function AnalyzeClient() {
 
       {phase === 'done' && (
         <div className="flex flex-col gap-5">
-          {uploadedImage && (
+          {uploadedVideo && (
+            <div className="bordered-card p-3">
+              <video
+                src={uploadedVideo}
+                className="w-full max-h-48 rounded-lg object-contain"
+                controls
+                muted
+              />
+              {!error && (
+                <p className="text-[#22c55e]/60 text-[11px] mt-2 text-center">
+                  {visionResult?._method === 'video-base64'
+                    ? 'GLM-5V-Turbo 视频直传分析完成'
+                    : visionResult?._method === 'multi-frame'
+                    ? `GLM-5V-Turbo 多关键帧分析完成`
+                    : 'AI 视频分析完成'}
+                </p>
+              )}
+            </div>
+          )}
+          {!uploadedVideo && uploadedImage && (
             <div className="bordered-card p-3">
               <img
                 src={uploadedImage}
@@ -325,15 +525,21 @@ export default function AnalyzeClient() {
               />
               {!isPreset && !error && (
                 <p className="text-[#22c55e]/60 text-[11px] mt-2 text-center">
-                  {analysisMode === 'video' ? 'GLM-5V-Turbo 视频理解分析完成' : 'AI 视觉模型分析完成'}
+                  {analysisLabel}完成
                 </p>
               )}
             </div>
           )}
 
           {error && (
-            <div className="bordered-card p-3 border-yellow-500/30 bg-yellow-500/5">
-              <p className="text-yellow-400/80 text-xs">{error}</p>
+            <div className="bordered-card p-3 border-yellow-500/30 bg-yellow-500/5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="chip chip-warn text-[10px]">预设数据</span>
+                <p className="text-yellow-400/80 text-xs">{error}</p>
+              </div>
+              <button className="btn btn-ghost text-xs shrink-0" onClick={resetAll}>
+                重新分析
+              </button>
             </div>
           )}
 
@@ -348,21 +554,7 @@ export default function AnalyzeClient() {
             />
           </div>
 
-          <button
-            className="btn btn-ghost w-fit"
-            onClick={() => {
-              setPhase('idle');
-              setUploadedImage(null);
-              setVisionResult(null);
-              setError(null);
-              setVideoUrl('');
-              setAnalysisMode('image');
-              if (objectUrlRef.current) {
-                URL.revokeObjectURL(objectUrlRef.current);
-                objectUrlRef.current = null;
-              }
-            }}
-          >
+          <button className="btn btn-ghost w-fit" onClick={resetAll}>
             重新分析
           </button>
         </div>

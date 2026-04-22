@@ -35,6 +35,7 @@ export default function MatchClient() {
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [ranked, setRanked] = useState<Array<{ id: string; score: number }>>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [matchError, setMatchError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setPhase('idle');
@@ -42,50 +43,69 @@ export default function MatchClient() {
     setWinnerId(null);
     setRanked([]);
     setSelectedId(null);
+    setMatchError(null);
   }, []);
 
   const startMatch = useCallback(async () => {
     reset();
     setPhase('scanning');
 
-    await delay(800);
-    setPhase('evaluating');
+    try {
+      await delay(800);
+      setPhase('evaluating');
 
-    const promises = BRANDS.map((brand) =>
-      fetch('/api/fitness', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId: brand.id, sceneId: 'qingyunian' }),
-      }).then((r) => r.json() as Promise<FitnessResult>)
-    );
+      const fallbackResult: FitnessResult = {
+        score: 50,
+        verdict: '降级评估',
+        reasons: ['API 调用失败，使用默认评分'],
+        categoryFit: 0.5,
+        styleFit: 0.5,
+      };
 
-    const results = await Promise.all(promises);
-    const resultMap = new Map<string, FitnessResult>();
-    BRANDS.forEach((b, i) => resultMap.set(b.id, results[i]));
+      const promises = BRANDS.map((brand) =>
+        fetch('/api/fitness', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId: brand.id, sceneId: 'qingyunian' }),
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error('API error');
+            return r.json() as Promise<FitnessResult>;
+          })
+          .catch(() => fallbackResult)
+      );
 
-    for (let i = 0; i < BRANDS.length; i++) {
-      const brand = BRANDS[i];
-      setBrandStates((prev) => ({
-        ...prev,
-        [brand.id]: { status: 'loading' },
-      }));
-      await delay(300);
-      setBrandStates((prev) => ({
-        ...prev,
-        [brand.id]: { status: 'done', result: resultMap.get(brand.id) },
-      }));
+      const results = await Promise.all(promises);
+      const resultMap = new Map<string, FitnessResult>();
+      BRANDS.forEach((b, i) => resultMap.set(b.id, results[i]));
+
+      for (let i = 0; i < BRANDS.length; i++) {
+        const brand = BRANDS[i];
+        setBrandStates((prev) => ({
+          ...prev,
+          [brand.id]: { status: 'loading' },
+        }));
+        await delay(300);
+        setBrandStates((prev) => ({
+          ...prev,
+          [brand.id]: { status: 'done', result: resultMap.get(brand.id) },
+        }));
+      }
+
+      const sorted = BRANDS.map((b) => ({
+        id: b.id,
+        score: resultMap.get(b.id)?.score ?? 0,
+      })).sort((a, b) => b.score - a.score);
+
+      await delay(800);
+      setRanked(sorted);
+      setWinnerId(sorted[0].id);
+      setSelectedId(sorted[0].id);
+      setPhase('result');
+    } catch {
+      setMatchError('品牌匹配过程出错，请检查网络后重试');
+      setPhase('idle');
     }
-
-    const sorted = BRANDS.map((b) => ({
-      id: b.id,
-      score: resultMap.get(b.id)?.score ?? 0,
-    })).sort((a, b) => b.score - a.score);
-
-    await delay(800);
-    setRanked(sorted);
-    setWinnerId(sorted[0].id);
-    setSelectedId(sorted[0].id);
-    setPhase('result');
   }, [reset]);
 
   const winner = BRANDS.find((b) => b.id === winnerId);
@@ -113,7 +133,7 @@ export default function MatchClient() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <button
           className="btn btn-primary"
           onClick={startMatch}
@@ -121,17 +141,34 @@ export default function MatchClient() {
         >
           {phase === 'idle' ? '开始匹配' : phase === 'result' ? '重新匹配' : '匹配中…'}
         </button>
-        {phase !== 'idle' && (
-          <div className="hidden sm:flex items-center gap-2 text-sm text-muted">
-            <StepDot active={phase === 'scanning'} done={phase === 'evaluating' || phase === 'result'} />
-            <span className={cn(phase === 'scanning' && 'text-echo')}>扫描场景上下文</span>
-            <span className="text-white/20 mx-1">→</span>
-            <StepDot active={phase === 'evaluating'} done={phase === 'result'} />
-            <span className={cn(phase === 'evaluating' && 'text-echo')}>逐一评估候选品牌</span>
-            <span className="text-white/20 mx-1">→</span>
-            <StepDot active={false} done={phase === 'result'} />
-            <span className={cn(phase === 'result' && 'text-echo')}>AI 选定最佳品牌</span>
+        {matchError && (
+          <div className="w-full bordered-card border-red-500/30 bg-red-500/5 p-4 flex items-center justify-between gap-3">
+            <p className="text-red-400/80 text-xs">{matchError}</p>
+            <button className="btn btn-ghost text-xs shrink-0" onClick={startMatch}>
+              重试
+            </button>
           </div>
+        )}
+        {phase !== 'idle' && (
+          <>
+            {/* 移动端：仅显示当前步骤 */}
+            <div className="sm:hidden text-sm text-echo">
+              {phase === 'scanning' && '扫描场景上下文…'}
+              {phase === 'evaluating' && '逐一评估候选品牌…'}
+              {phase === 'result' && 'AI 已选定最佳品牌'}
+            </div>
+            {/* 桌面端：完整三步 */}
+            <div className="hidden sm:flex items-center gap-2 text-sm text-muted">
+              <StepDot active={phase === 'scanning'} done={phase === 'evaluating' || phase === 'result'} />
+              <span className={cn(phase === 'scanning' && 'text-echo')}>扫描场景上下文</span>
+              <span className="text-white/20 mx-1">→</span>
+              <StepDot active={phase === 'evaluating'} done={phase === 'result'} />
+              <span className={cn(phase === 'evaluating' && 'text-echo')}>逐一评估候选品牌</span>
+              <span className="text-white/20 mx-1">→</span>
+              <StepDot active={false} done={phase === 'result'} />
+              <span className={cn(phase === 'result' && 'text-echo')}>AI 选定最佳品牌</span>
+            </div>
+          </>
         )}
       </div>
 
@@ -183,7 +220,8 @@ export default function MatchClient() {
               <div
                 key={brand.id}
                 className={cn(
-                  'bordered-card p-3 transition-all duration-500 cursor-pointer',
+                  'bordered-card p-3 transition-all duration-500',
+                  phase === 'result' ? 'cursor-pointer' : 'cursor-default',
                   borderColor,
                   isWinner && 'ring-2 ring-echo scale-[1.03] shadow-[0_0_30px_rgba(212,165,116,0.15)]',
                   isSelected && !isWinner && 'ring-1 ring-white/30',

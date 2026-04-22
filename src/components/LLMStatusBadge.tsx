@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 
 type LLMStatus = { mock: boolean; baseURL: string; model: string };
@@ -8,6 +8,7 @@ type LLMStatus = { mock: boolean; baseURL: string; model: string };
 export default function LLMStatusBadge() {
   const [status, setStatus] = useState<LLMStatus | null>(null);
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch('/api/status')
@@ -16,10 +17,30 @@ export default function LLMStatusBadge() {
       .catch(() => setStatus({ mock: true, baseURL: 'unreachable', model: '' }));
   }, []);
 
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        close();
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open, close]);
+
   if (!status) return null;
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen((v) => !v)}
         className={cn(
@@ -36,7 +57,7 @@ export default function LLMStatusBadge() {
         {status.mock ? 'Mock · 离线演示' : 'LLM · 实时'}
       </button>
       {open && (
-        <div className="absolute top-full right-0 mt-2 w-72 glass-hi rounded-xl p-4 text-xs shadow-2xl">
+        <div className="absolute top-full right-0 mt-2 w-72 max-w-[calc(100vw-2.5rem)] glass-hi rounded-xl p-4 text-xs shadow-2xl z-50">
           <div className="font-semibold mb-2">
             {status.mock ? '当前处于 Mock 模式' : '已接入实时 LLM'}
           </div>

@@ -26,7 +26,7 @@ export default function TopNav() {
       <header className="fixed top-4 left-0 right-0 z-50 px-5 md:px-8 lg:px-12 pointer-events-none">
         <div className="max-w-[1280px] mx-auto flex items-center justify-between gap-4 pointer-events-auto">
           {/* 左：Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+          <Link href="/" className="flex items-center gap-2.5 group shrink-0 hover:opacity-80 transition-opacity">
             <div className="w-9 h-9 rounded-full liquid-glass grid place-items-center text-white font-heading italic text-[15px]">
               E
             </div>

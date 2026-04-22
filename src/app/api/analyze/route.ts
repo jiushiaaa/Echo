@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeScene, analyzeSceneVision, analyzeVideoUrl } from '@/lib/echo';
+import { analyzeScene, analyzeSceneVision, analyzeVideoUrl, analyzeVideoBase64 } from '@/lib/echo';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,6 +9,11 @@ export async function POST(req: NextRequest) {
 
     if (body.videoUrl) {
       const result = await analyzeVideoUrl(body.videoUrl);
+      return NextResponse.json(result);
+    }
+
+    if (body.videoBase64) {
+      const result = await analyzeVideoBase64(body.videoBase64, body.keyFrames);
       return NextResponse.json(result);
     }
 

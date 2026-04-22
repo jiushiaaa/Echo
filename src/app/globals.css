@@ -296,6 +296,12 @@ main, header, footer {
   transform: translateY(-1px);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
 }
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
 /* 液态玻璃按钮（参考的 Primary CTA 方案） */
 .btn-glass {

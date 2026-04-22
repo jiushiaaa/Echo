@@ -54,9 +54,35 @@ export default function CompareClient({
   const streamStarted = useRef(false);
   const returnStreamStarted = useRef(false);
 
+  const [leftTimingLabel, setLeftTimingLabel] = useState<string | null>(null);
+  const [rightTimingLabel, setRightTimingLabel] = useState<string | null>(null);
+
+  const runIdRef = useRef(0);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const addTimer = useCallback((fn: () => void, ms: number, runId: number) => {
+    const id = setTimeout(() => {
+      if (runIdRef.current !== runId) return;
+      fn();
+    }, ms);
+    timersRef.current.push(id);
+    return id;
+  }, []);
+
+  const clearAllTimers = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     if (rightMode !== 'transition' || streamStarted.current) return;
     streamStarted.current = true;
+    const currentRun = runIdRef.current;
 
     const role = ROLE_TONES[scene.roleToneId];
     setTransitionText('');
@@ -78,9 +104,14 @@ export default function CompareClient({
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         function read(): Promise<void> {
+          if (runIdRef.current !== currentRun) {
+            reader.cancel();
+            return Promise.resolve();
+          }
           return reader.read().then(({ done, value }) => {
+            if (runIdRef.current !== currentRun) { reader.cancel(); return; }
             if (done) {
-              setTimeout(() => setRightMode('nativeAd'), 1200);
+              addTimer(() => setRightMode('nativeAd'), 1200, currentRun);
               return;
             }
             setTransitionText((prev) => prev + decoder.decode(value, { stream: true }));
@@ -90,14 +121,16 @@ export default function CompareClient({
         return read();
       })
       .catch(() => {
+        if (runIdRef.current !== currentRun) return;
         setTransitionText(`${role.displayName}：${scene.heroAd.brandName}，值得被好好对待。`);
-        setTimeout(() => setRightMode('nativeAd'), 1200);
+        addTimer(() => setRightMode('nativeAd'), 1200, currentRun);
       });
-  }, [rightMode, scene]);
+  }, [rightMode, scene, addTimer]);
 
   useEffect(() => {
     if (rightMode !== 'return' || returnStreamStarted.current) return;
     returnStreamStarted.current = true;
+    const currentRun = runIdRef.current;
 
     setReturnText('');
 
@@ -118,9 +151,11 @@ export default function CompareClient({
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         function read(): Promise<void> {
+          if (runIdRef.current !== currentRun) { reader.cancel(); return Promise.resolve(); }
           return reader.read().then(({ done, value }) => {
+            if (runIdRef.current !== currentRun) { reader.cancel(); return; }
             if (done) {
-              setTimeout(() => setRightMode('done'), 1500);
+              addTimer(() => setRightMode('done'), 1500, currentRun);
               return;
             }
             setReturnText((prev) => prev + decoder.decode(value, { stream: true }));
@@ -130,12 +165,17 @@ export default function CompareClient({
         return read();
       })
       .catch(() => {
+        if (runIdRef.current !== currentRun) return;
         setReturnText('灯火重燃，故事未完。');
-        setTimeout(() => setRightMode('done'), 1500);
+        addTimer(() => setRightMode('done'), 1500, currentRun);
       });
-  }, [rightMode, scene]);
+  }, [rightMode, scene, addTimer]);
 
   const handleStart = useCallback(() => {
+    clearAllTimers();
+    runIdRef.current++;
+    const currentRun = runIdRef.current;
+
     setPlaying(true);
     setLeftMode('scene');
     setRightMode('scene');
@@ -143,21 +183,32 @@ export default function CompareClient({
     setRightTime(0);
     setTransitionText('');
     setReturnText('');
+    setLeftTimingLabel(null);
+    setRightTimingLabel(null);
     streamStarted.current = false;
     returnStreamStarted.current = false;
     setDecision(initialSteps(scene, analysis));
-    scheduleDecisionFlow(setDecision);
-  }, [scene, analysis]);
+    scheduleDecisionFlow(setDecision, addTimer, currentRun);
+  }, [scene, analysis, clearAllTimers, addTimer]);
 
   const hasAutoStarted = useRef(false);
   useEffect(() => {
     if (hasAutoStarted.current) return;
     hasAutoStarted.current = true;
-    const t = setTimeout(() => handleStart(), 1000);
-    return () => clearTimeout(t);
+    autoTimerRef.current = setTimeout(() => {
+      autoTimerRef.current = null;
+      handleStart();
+    }, 1000);
+    return () => {
+      if (autoTimerRef.current) {
+        clearTimeout(autoTimerRef.current);
+        autoTimerRef.current = null;
+      }
+    };
   }, [handleStart]);
 
   const handleRestart = useCallback(() => {
+    clearAllTimers();
     setPlaying(false);
     setLeftMode('idle');
     setRightMode('idle');
@@ -165,28 +216,45 @@ export default function CompareClient({
     setRightTime(0);
     setTransitionText('');
     setReturnText('');
+    setLeftTimingLabel(null);
+    setRightTimingLabel(null);
     streamStarted.current = false;
     returnStreamStarted.current = false;
     setDecision(initialSteps(scene, analysis));
-    setTimeout(handleStart, 100);
-  }, [handleStart, scene, analysis]);
+    const t = setTimeout(handleStart, 100);
+    timersRef.current.push(t);
+  }, [handleStart, scene, analysis, clearAllTimers]);
 
-  const onLeftTimeUpdate = (t: number) => {
+  const onLeftTimeUpdate = useCallback((t: number) => {
     setLeftTime(t);
-    if (leftMode === 'scene' && t >= leftTightT) {
-      setLeftMode('hardAd');
+    if (t >= leftTightT) {
+      setLeftMode((prev) => {
+        if (prev === 'scene') {
+          setLeftTimingLabel(`${scene.tightMoment.label} · 高潮硬切`);
+          setTimeout(() => setLeftTimingLabel(null), 2500);
+          return 'hardAd';
+        }
+        return prev;
+      });
     }
-  };
+  }, [leftTightT, scene.tightMoment.label]);
 
-  const onRightTimeUpdate = (t: number) => {
+  const onRightTimeUpdate = useCallback((t: number) => {
     setRightTime(t);
-    if (rightMode === 'scene' && t >= rightRelaxT) {
-      setRightMode('transition');
+    if (t >= rightRelaxT) {
+      setRightMode((prev) => {
+        if (prev === 'scene') {
+          setRightTimingLabel(`${scene.relaxedMoment.label} · Echo 介入`);
+          setTimeout(() => setRightTimingLabel(null), 2500);
+          return 'transition';
+        }
+        return prev;
+      });
     }
-  };
+  }, [rightRelaxT, scene.relaxedMoment.label]);
 
-  const onHardAdEnd = () => setLeftMode('done');
-  const onNativeAdEnd = () => setRightMode('return');
+  const onHardAdEnd = useCallback(() => setLeftMode('done'), []);
+  const onNativeAdEnd = useCallback(() => setRightMode('return'), []);
 
   const activeStreamText =
     rightMode === 'transition' ? transitionText
@@ -230,44 +298,58 @@ export default function CompareClient({
             </p>
           </div>
 
-          {leftMode === 'scene' || leftMode === 'idle' ? (
-            <SceneVideoStub
-              scene={scene}
-              playing={playing && leftMode === 'scene'}
-              currentTime={mapTime(leftTime, SCENE_SHORT_DURATION, scene.duration)}
-              onTimeUpdate={onLeftTimeUpdate}
-            />
-          ) : leftMode === 'hardAd' ? (
-            <div className="relative">
-              <AdPlayer
-                videoSrc={MISMATCH_AD.videoSrc}
-                frames={[
-                  {
-                    bgGradient: 'linear-gradient(135deg, #1a0818 0%, #c2547a 100%)',
-                    headline: MISMATCH_AD.brandName,
-                    footline: MISMATCH_AD.sellingPoint,
-                  },
-                ]}
-                duration={MISMATCH_AD.duration}
-                brandName={MISMATCH_AD.brandName}
-                playing
-                onEnd={onHardAdEnd}
-                variant="hard"
+          <div className="relative">
+            {leftMode === 'scene' || leftMode === 'idle' ? (
+              <SceneVideoStub
+                scene={scene}
+                playing={playing && leftMode === 'scene'}
+                currentTime={mapTime(leftTime, SCENE_SHORT_DURATION, scene.duration)}
+                onTimeUpdate={onLeftTimeUpdate}
               />
-              <div className="absolute inset-0 pointer-events-none animate-fade-in">
-                <div className="absolute top-6 right-6 chip chip-danger">
-                  高潮硬切 · 品牌不匹配 · 无过渡
+            ) : leftMode === 'hardAd' ? (
+              <>
+                <AdPlayer
+                  videoSrc={MISMATCH_AD.videoSrc}
+                  frames={[
+                    {
+                      bgGradient: 'linear-gradient(135deg, #1a0818 0%, #c2547a 100%)',
+                      headline: MISMATCH_AD.brandName,
+                      footline: MISMATCH_AD.sellingPoint,
+                    },
+                  ]}
+                  duration={MISMATCH_AD.duration}
+                  brandName={MISMATCH_AD.brandName}
+                  playing
+                  onEnd={onHardAdEnd}
+                  variant="hard"
+                />
+                <div className="absolute inset-0 pointer-events-none animate-fade-in">
+                  <div className="absolute top-6 right-6 chip chip-danger">
+                    高潮硬切 · 品牌不匹配 · 无过渡
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="aspect-video rounded-xl grid place-items-center bordered-card text-center p-6">
+                <div>
+                  <div className="chip chip-danger mb-3">硬广结束 · 67% 用户已跳过</div>
+                  <div className="text-lg text-muted">剧情被打断 · 情绪断裂 · 品牌毫无关联</div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="aspect-video rounded-xl grid place-items-center bordered-card text-center p-6">
-              <div>
-                <div className="chip chip-danger mb-3">硬广结束 · 67% 用户已跳过</div>
-                <div className="text-lg text-muted">剧情被打断 · 情绪断裂 · 品牌毫无关联</div>
-              </div>
-            </div>
-          )}
+            )}
+            <AnimatePresence>
+              {leftTimingLabel && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute top-3 left-3 z-10 chip chip-danger text-[10px]"
+                >
+                  ⏱ {leftTimingLabel}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <div className="grid grid-cols-3 gap-2">
             <Stat label="用户跳过率" value="67%" tone="danger" />
@@ -287,102 +369,116 @@ export default function CompareClient({
             </p>
           </div>
 
-          <AnimatePresence mode="wait">
-            {(rightMode === 'scene' || rightMode === 'idle') && (
-              <motion.div key="scene" {...cardVariants}>
-                <SceneVideoStub
-                  scene={scene}
-                  playing={playing && rightMode === 'scene'}
-                  currentTime={mapTime(rightTime, SCENE_SHORT_DURATION, scene.duration)}
-                  onTimeUpdate={onRightTimeUpdate}
-                />
-              </motion.div>
-            )}
+          <div className="relative">
+            <AnimatePresence mode="wait">
+              {(rightMode === 'scene' || rightMode === 'idle') && (
+                <motion.div key="scene" {...cardVariants}>
+                  <SceneVideoStub
+                    scene={scene}
+                    playing={playing && rightMode === 'scene'}
+                    currentTime={mapTime(rightTime, SCENE_SHORT_DURATION, scene.duration)}
+                    onTimeUpdate={onRightTimeUpdate}
+                  />
+                </motion.div>
+              )}
 
-            {rightMode === 'transition' && (
-              <motion.div
-                key="transition"
-                variants={cardVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden"
-              >
-                <div
-                  className="absolute inset-0 opacity-20"
-                  style={{ background: scene.poster.bgGradient }}
-                />
-                <div className="relative z-10 px-8 text-center max-w-lg">
-                  <div className="chip chip-echo mb-4">AI 过渡语 · {ROLE_TONES[scene.roleToneId].displayName}</div>
-                  <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
-                    「{transitionText}
-                    <span className="stream-cursor" />」
-                  </p>
-                  <p className="text-xs text-muted mt-3">
-                    从剧情情绪平滑衔接到广告
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            {rightMode === 'nativeAd' && (
-              <motion.div key="native-ad" {...cardVariants} className="relative">
-                <AdPlayer
-                  videoSrc={scene.heroAd.realAdSrc}
-                  frames={scene.heroAd.fallbackFrames}
-                  duration={scene.heroAd.duration}
-                  brandName={scene.heroAd.brandName}
-                  playing
-                  onEnd={onNativeAdEnd}
-                  variant="native"
-                />
-                <div className="absolute inset-0 pointer-events-none animate-fade-in">
-                  <div className="absolute top-6 right-6 chip chip-echo">
-                    Echo 匹配品牌 · {scene.heroAd.brandName}
+              {rightMode === 'transition' && (
+                <motion.div
+                  key="transition"
+                  variants={cardVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden"
+                >
+                  <div
+                    className="absolute inset-0 opacity-20"
+                    style={{ background: scene.poster.bgGradient }}
+                  />
+                  <div className="relative z-10 px-8 text-center max-w-lg">
+                    <div className="chip chip-echo mb-4">AI 过渡语 · {ROLE_TONES[scene.roleToneId].displayName}</div>
+                    <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
+                      「{transitionText}
+                      <span className="stream-cursor" />」
+                    </p>
+                    <p className="text-xs text-muted mt-3">
+                      从剧情情绪平滑衔接到广告
+                    </p>
                   </div>
-                </div>
-              </motion.div>
-            )}
+                </motion.div>
+              )}
 
-            {rightMode === 'return' && (
-              <motion.div
-                key="return"
-                variants={cardVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden"
-              >
-                <div
-                  className="absolute inset-0 opacity-20"
-                  style={{ background: scene.poster.bgGradient }}
-                />
-                <div className="relative z-10 px-8 text-center max-w-lg">
-                  <div className="chip chip-echo mb-4">AI 回归语 · 拉回剧情</div>
-                  <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
-                    「{returnText}
-                    <span className="stream-cursor" />」
-                  </p>
-                  <p className="text-xs text-muted mt-3">
-                    广告结束，AI 将观众情绪拉回剧情
-                  </p>
-                </div>
-              </motion.div>
-            )}
+              {rightMode === 'nativeAd' && (
+                <motion.div key="native-ad" {...cardVariants} className="relative">
+                  <AdPlayer
+                    videoSrc={scene.heroAd.realAdSrc}
+                    frames={scene.heroAd.fallbackFrames}
+                    duration={scene.heroAd.duration}
+                    brandName={scene.heroAd.brandName}
+                    playing
+                    onEnd={onNativeAdEnd}
+                    variant="native"
+                  />
+                  <div className="absolute inset-0 pointer-events-none animate-fade-in">
+                    <div className="absolute top-6 right-6 chip chip-echo">
+                      Echo 匹配品牌 · {scene.heroAd.brandName}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
-            {rightMode === 'done' && (
-              <motion.div
-                key="done"
-                {...cardVariants}
-                className="aspect-video rounded-xl grid place-items-center bordered-card text-center p-6"
-              >
-                <div>
-                  <div className="chip chip-echo mb-3">Echo 投放完成 · 78% 完播</div>
-                  <div className="text-lg text-white/80">过渡语 → 匹配广告 → 回归语 · 剧情无感恢复</div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              {rightMode === 'return' && (
+                <motion.div
+                  key="return"
+                  variants={cardVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  className="aspect-video rounded-xl grid place-items-center bordered-card relative overflow-hidden"
+                >
+                  <div
+                    className="absolute inset-0 opacity-20"
+                    style={{ background: scene.poster.bgGradient }}
+                  />
+                  <div className="relative z-10 px-8 text-center max-w-lg">
+                    <div className="chip chip-echo mb-4">AI 回归语 · 拉回剧情</div>
+                    <p className="editorial-italic text-xl md:text-2xl text-white/90 leading-relaxed">
+                      「{returnText}
+                      <span className="stream-cursor" />」
+                    </p>
+                    <p className="text-xs text-muted mt-3">
+                      广告结束，AI 将观众情绪拉回剧情
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
+              {rightMode === 'done' && (
+                <motion.div
+                  key="done"
+                  {...cardVariants}
+                  className="aspect-video rounded-xl grid place-items-center bordered-card text-center p-6"
+                >
+                  <div>
+                    <div className="chip chip-echo mb-3">Echo 投放完成 · 78% 完播</div>
+                    <div className="text-lg text-white/80">过渡语 → 匹配广告 → 回归语 · 剧情无感恢复</div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {rightTimingLabel && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute top-3 left-3 z-10 chip chip-echo text-[10px]"
+                >
+                  ⏱ {rightTimingLabel}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <div className="grid grid-cols-3 gap-2">
             <Stat label="用户跳过率" value="22%" tone="ok" sub="↓45pp vs 传统" />
@@ -475,19 +571,23 @@ function initialSteps(scene: SceneDefinition, analysis: SceneAnalysis): Decision
   ];
 }
 
-function scheduleDecisionFlow(setDecision: (fn: (prev: DecisionStep[]) => DecisionStep[]) => void) {
+function scheduleDecisionFlow(
+  setDecision: (fn: (prev: DecisionStep[]) => DecisionStep[]) => void,
+  addTimer: (fn: () => void, ms: number, runId: number) => ReturnType<typeof setTimeout>,
+  runId: number,
+) {
   const timings = [300, 900, 1500, 2200, 3000];
   const durations = [500, 500, 500, 500, 500];
   timings.forEach((t, i) => {
-    setTimeout(() => {
+    addTimer(() => {
       setDecision((prev) =>
         prev.map((s, idx) => (idx === i ? { ...s, state: 'active' } : s))
       );
-    }, t);
-    setTimeout(() => {
+    }, t, runId);
+    addTimer(() => {
       setDecision((prev) =>
         prev.map((s, idx) => (idx === i ? { ...s, state: 'done' } : s))
       );
-    }, t + durations[i]);
+    }, t + durations[i], runId);
   });
 }

@@ -69,10 +69,12 @@ export default function AIDecisionPanel({
       </div>
 
       {streamingText !== undefined && (
-        <div className="mt-4 pt-4 border-t border-white/5">
+        <div className="mt-4 pt-4 border-t border-dashed border-white/10">
           <div className="flex items-center gap-2 text-xs text-muted mb-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-            {streamingLabel}
+            <div className="w-1.5 h-1.5 rounded-full bg-echo animate-pulse" />
+            <span className="text-echo/80">以下为 AI 实时生成</span>
+            <span className="text-white/30 mx-1">·</span>
+            <span>{streamingLabel}</span>
           </div>
           <div
             className="font-serif text-[17px] leading-relaxed text-text stream-cursor"
